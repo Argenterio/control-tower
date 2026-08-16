@@ -1,17 +1,17 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json tsconfig.json ./
 RUN npm install
 COPY src ./src
-COPY prisma ./prisma
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
 EXPOSE 3000
 ENV NODE_ENV=production
 CMD ["node", "dist/server.js"]
