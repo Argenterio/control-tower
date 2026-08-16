@@ -210,7 +210,7 @@ app.post("/api/calculate-eta", (req: express.Request, res: express.Response) => 
 });
 
 // Start server
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log("Control Tower API running on port " + port);
   console.log("Environment: " + (process.env.NODE_ENV || "development"));
   console.log("Frontend URL: " + (process.env.FRONTEND_URL || "http://localhost:3000"));
@@ -219,11 +219,8 @@ app.listen(port, () => {
 // Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM received. Closing server...");
-  // @ts-ignore
   server.close(() => {
     console.log("Server closed");
-    // @ts-ignore
-    (dbService as DatabaseService).close();
     process.exit(0);
   });
 });
