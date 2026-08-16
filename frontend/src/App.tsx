@@ -14,6 +14,7 @@ import {
 } from "./api"
 
 type View = "dashboard" | "companies" | "trips" | "users"
+type Theme = "light" | "dark"
 
 const statusClass: Record<string, string> = {
   active: "badge badge-green",
@@ -29,7 +30,31 @@ function statusBadge(status?: string) {
   return <span className={statusClass[status] || "badge badge-gray"}>{status}</span>
 }
 
+function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className="theme-toggle-btn"
+      onClick={onToggle}
+      title={theme === "dark" ? "Cambiar a modo Claro" : "Cambiar a modo Oscuro"}
+      aria-label="Cambiar tema"
+    >
+      <span className="theme-toggle-icon">{theme === "dark" ? "☀️" : "🌙"}</span>
+      <span>{theme === "dark" ? "Claro" : "Oscuro"}</span>
+    </button>
+  )
+}
+
 export default function App() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem("ct_theme")
+    if (saved === "light" || saved === "dark") return saved
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return "dark"
+    }
+    return "dark"
+  })
+
   const [view, setView] = useState<View>("dashboard")
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -38,6 +63,15 @@ export default function App() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme)
+    localStorage.setItem("ct_theme", theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"))
+  }
 
   useEffect(() => {
     const token = getToken()
@@ -99,7 +133,9 @@ export default function App() {
   if (authLoading) {
     return (
       <div className="loader-screen">
-        <img src="/logo.png" alt="Control Tower" className="loader-logo" />
+        <div className="loader-logo-wrap">
+          <img src="/logo.svg" alt="Control Tower" className="loader-logo" />
+        </div>
         <div className="spinner" />
         <p>Cargando sesión…</p>
       </div>
@@ -107,13 +143,15 @@ export default function App() {
   }
 
   if (!authUser) {
-    return <LoginScreen onLogin={handleLogin} />
+    return <LoginScreen onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />
   }
 
   if (loading) {
     return (
       <div className="loader-screen">
-        <img src="/logo.png" alt="Control Tower" className="loader-logo" />
+        <div className="loader-logo-wrap">
+          <img src="/logo.svg" alt="Control Tower" className="loader-logo" />
+        </div>
         <div className="spinner" />
         <p>Cargando datos…</p>
       </div>
@@ -124,7 +162,9 @@ export default function App() {
     <div className="layout">
       <aside className="sidebar">
         <div className="brand">
-          <img src="/logo.png" alt="Control Tower logo" />
+          <div className="brand-logo-wrap">
+            <img src="/logo.svg" alt="Control Tower" />
+          </div>
           <span>Control Tower</span>
         </div>
         <nav className="nav">
@@ -161,15 +201,19 @@ export default function App() {
             </h1>
             <p className="page-subtitle">Plataforma SaaS para Empresas de Transporte de Cargas</p>
           </div>
-          <div className="user-menu">
-            <div className="avatar" aria-hidden="true">
-              {authUser.name ? authUser.name.charAt(0).toUpperCase() : "?"}
+
+          <div className="topbar-actions">
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <div className="user-menu">
+              <div className="avatar" aria-hidden="true">
+                {authUser.name ? authUser.name.charAt(0).toUpperCase() : "U"}
+              </div>
+              <div className="user-info">
+                <span className="user-name">{authUser.name}</span>
+                <span className="user-role">{authUser.role}</span>
+              </div>
+              <button className="logout-btn" onClick={handleLogout} title="Cerrar sesión">Salir</button>
             </div>
-            <div className="user-info">
-              <span className="user-name">{authUser.name}</span>
-              <span className="user-role">{authUser.role}</span>
-            </div>
-            <button className="logout-btn" onClick={handleLogout} title="Cerrar sesión">Salir</button>
           </div>
         </header>
 
@@ -329,7 +373,15 @@ export default function App() {
   )
 }
 
-function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) => Promise<{ success: boolean; error?: string }> }) {
+function LoginScreen({
+  onLogin,
+  theme,
+  onToggleTheme,
+}: {
+  onLogin: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  theme: Theme
+  onToggleTheme: () => void
+}) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
@@ -349,8 +401,13 @@ function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) =
 
   return (
     <div className="login-screen">
+      <div className="login-top-bar">
+        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+      </div>
       <form className="login-card" onSubmit={submit}>
-        <img src="/logo.png" alt="Control Tower logo" className="login-logo" />
+        <div className="login-logo-wrap">
+          <img src="/logo.svg" alt="Control Tower" className="login-logo" />
+        </div>
         <h1>Control Tower</h1>
         <p className="login-sub">Ingresá a la plataforma de gestión de transporte</p>
         {error && <div className="alert">{error}</div>}
