@@ -49,7 +49,17 @@ app.get("/", (req: express.Request, res: express.Response) => {
     success: true,
     data: {
       name: "Control Tower API",
+      version: "1.0.0",
       status: "running",
+      endpoints: [
+        "/health",
+        "/api/companies",
+        "/api/users",
+        "/api/vehicles",
+        "/api/drivers",
+        "/api/customers",
+        "/api/trips"
+      ],
       timestamp: new Date().toISOString()
     }
   });
