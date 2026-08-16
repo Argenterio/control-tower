@@ -37,33 +37,80 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: "10kb" }));
+app.use(express.static("public"));
 
 // Health check - returns typed response
 app.get("/health", (req: express.Request, res: express.Response) => {
   res.json({ success: true, data: { status: "ok", timestamp: new Date().toISOString() } });
 });
 
-// Root route - returns basic info (used by EasyPanel health checks)
+// Root route - returns a professional landing page (HTTP 200 for EasyPanel health checks)
 app.get("/", (req: express.Request, res: express.Response) => {
-  res.json({
-    success: true,
-    data: {
-      name: "Control Tower API",
-      version: "1.0.0",
-      status: "running",
-      endpoints: [
-        "/health",
-        "/api/companies",
-        "/api/users",
-        "/api/vehicles",
-        "/api/drivers",
-        "/api/customers",
-        "/api/trips"
-      ],
-      timestamp: new Date().toISOString()
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control Tower API</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
     }
-  });
-});
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 720px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+    .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+    .brand img { width: 48px; height: 48px; border-radius: 10px; }
+    .brand h1 { font-size: 24px; font-weight: 700; }
+    .status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #86efac; background: #052e16; border: 1px solid #166534; padding: 4px 12px; border-radius: 20px; margin-bottom: 24px; }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    p.sub { color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    a.endpoint {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+      padding: 12px 14px; text-decoration: none; font-size: 13px;
+      color: #93c5fd; transition: border-color .15s, color .15s;
+    }
+    a.endpoint:hover { border-color: #3b82f6; color: #dbeafe; }
+    a.endpoint .method { font-weight: 700; color: #22c55e; }
+    .version { margin-top: 24px; font-size: 12px; color: #64748b; }
+    @media (max-width: 520px) { .card { padding: 24px; } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <img src="/logo.png" alt="Control Tower" onerror="this.style.display='none'" />
+      <h1>Control Tower API</h1>
+    </div>
+    <span class="status">Servicio en línea</span>
+    <p class="sub">API REST para la plataforma SaaS de empresas de transporte de cargas. Base URL: <code>${req.protocol}://${req.get("host")}</code></p>
+    <div class="grid">
+      ${["/health", "/api/companies", "/api/users", "/api/vehicles", "/api/drivers", "/api/customers", "/api/trips"]
+        .map((e) => `<a class="endpoint" href="${e}"><span>${e}</span><span class="method">GET</span></a>`)
+        .join("")}
+    </div>
+    <div class="version">Version 1.0.0 &middot; ${new Date().toISOString()}</div>
+  </div>
+</body>
+</html>`
+  res.send(html)
+})
 
 // === COMPANIES ROUTES ===
 // GET /api/companies
