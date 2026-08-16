@@ -43,6 +43,18 @@ app.get("/health", (req: express.Request, res: express.Response) => {
   res.json({ success: true, data: { status: "ok", timestamp: new Date().toISOString() } });
 });
 
+// Root route - returns basic info (used by EasyPanel health checks)
+app.get("/", (req: express.Request, res: express.Response) => {
+  res.json({
+    success: true,
+    data: {
+      name: "Control Tower API",
+      status: "running",
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
 // === COMPANIES ROUTES ===
 // GET /api/companies
 app.get("/api/companies", (req: express.Request, res: express.Response) => {
