@@ -12,6 +12,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-EXPOSE 3000
+RUN mkdir -p /data && chown -R node:node /data && chmod 755 /data
 ENV NODE_ENV=production
+ENV DB_PATH=/data/dev.db
+USER node
+EXPOSE 3000
 CMD ["node", "dist/server.js"]

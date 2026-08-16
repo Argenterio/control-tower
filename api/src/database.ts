@@ -8,7 +8,7 @@ import type { Database as SqliteDatabase } from "better-sqlite3";
 import path from "path";
 
 // Configuración de conexión - usar ruta absoluta para evitar problemas de directorio
-const dbPath = path.resolve(process.cwd(), "dev.db");
+const dbPath = process.env.DB_PATH || path.resolve(process.cwd(), "dev.db");
 
 // Opcional: usar DATABASE_URL si está definido
 // const dbPath = process.env.DATABASE_URL?.replace("file:", "") || path.resolve(process.cwd(), "dev.db");
