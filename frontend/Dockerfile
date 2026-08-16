@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json tsconfig.json vite.config.ts index.html ./
-RUN npm install
+RUN npm ci
 COPY src ./src
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
