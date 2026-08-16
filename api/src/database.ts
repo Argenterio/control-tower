@@ -700,6 +700,16 @@ export class DatabaseService {
     return { id: row.id, name: row.name, ...row } as User;
   }
 
+  getUserByEmail(email: string): User | null {
+    const row = this.db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+    if (!row) return null;
+    return { id: row.id, name: row.name, ...row } as User;
+  }
+
+  updateLastLogin(id: string): void {
+    this.db.prepare("UPDATE users SET lastLogin = ? WHERE id = ?").run(new Date().toISOString(), id);
+  }
+
   createUser(user: Omit<User, "id" | "createdAt" | "updatedAt">): User {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();

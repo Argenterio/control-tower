@@ -1,6 +1,17 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import "./App.css"
-import { apiCompanies, apiTrips, apiUsers, type Company, type Trip, type User } from "./api"
+import {
+  apiCompanies,
+  apiTrips,
+  apiUsers,
+  apiAuth,
+  getToken,
+  setToken,
+  type Company,
+  type Trip,
+  type User,
+  type AuthUser,
+} from "./api"
 
 type View = "dashboard" | "companies" | "trips" | "users"
 
@@ -20,6 +31,8 @@ function statusBadge(status?: string) {
 
 export default function App() {
   const [view, setView] = useState<View>("dashboard")
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [companies, setCompanies] = useState<Company[]>([])
   const [trips, setTrips] = useState<Trip[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -27,6 +40,38 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const token = getToken()
+    if (!token) {
+      setAuthLoading(false)
+      return
+    }
+    apiAuth
+      .me()
+      .then((res) => {
+        if (res.data) setAuthUser(res.data)
+        else setToken(null)
+      })
+      .catch(() => setToken(null))
+      .finally(() => setAuthLoading(false))
+  }, [])
+
+  const handleLogin = (email: string, password: string) => {
+    return apiAuth.login(email, password).then((res) => {
+      if (res.data) {
+        setToken(res.data.token)
+        setAuthUser(res.data.user)
+      }
+      return res
+    })
+  }
+
+  const handleLogout = () => {
+    setToken(null)
+    setAuthUser(null)
+  }
+
+  useEffect(() => {
+    if (!authUser) return
     const loadData = async () => {
       try {
         const [c, t, u] = await Promise.all([
@@ -45,11 +90,25 @@ export default function App() {
       }
     }
     loadData()
-  }, [])
+  }, [authUser])
 
   const activeTrips = trips.filter((t) => t.status === "in_progress" || t.status === "pending").length
   const activeCompanies = companies.filter((c) => c.status === "active").length
   const admins = users.filter((u) => u.role === "admin").length
+
+  if (authLoading) {
+    return (
+      <div className="loader-screen">
+        <img src="/logo.png" alt="Control Tower" className="loader-logo" />
+        <div className="spinner" />
+        <p>Cargando sesión…</p>
+      </div>
+    )
+  }
+
+  if (!authUser) {
+    return <LoginScreen onLogin={handleLogin} />
+  }
 
   if (loading) {
     return (
@@ -101,6 +160,16 @@ export default function App() {
               {view === "users" && "Usuarios"}
             </h1>
             <p className="page-subtitle">Plataforma SaaS para Empresas de Transporte de Cargas</p>
+          </div>
+          <div className="user-menu">
+            <div className="avatar" aria-hidden="true">
+              {authUser.name ? authUser.name.charAt(0).toUpperCase() : "?"}
+            </div>
+            <div className="user-info">
+              <span className="user-name">{authUser.name}</span>
+              <span className="user-role">{authUser.role}</span>
+            </div>
+            <button className="logout-btn" onClick={handleLogout} title="Cerrar sesión">Salir</button>
           </div>
         </header>
 
@@ -256,6 +325,61 @@ export default function App() {
           </section>
         )}
       </main>
+    </div>
+  )
+}
+
+function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) => Promise<{ success: boolean; error?: string }> }) {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setBusy(true)
+    onLogin(email, password)
+      .then((res) => {
+        if (!res.success) setError(res.error || "Error al iniciar sesión")
+      })
+      .catch(() => setError("No se pudo conectar con la API."))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <div className="login-screen">
+      <form className="login-card" onSubmit={submit}>
+        <img src="/logo.png" alt="Control Tower logo" className="login-logo" />
+        <h1>Control Tower</h1>
+        <p className="login-sub">Ingresá a la plataforma de gestión de transporte</p>
+        {error && <div className="alert">{error}</div>}
+        <label className="field">
+          <span>Email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="admin@controltower.com"
+            autoComplete="username"
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Contraseña</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            required
+          />
+        </label>
+        <button type="submit" className="login-btn" disabled={busy}>
+          {busy ? "Ingresando…" : "Ingresar"}
+        </button>
+      </form>
     </div>
   )
 }

@@ -6,11 +6,42 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" }
 })
 
+const TOKEN_KEY = "ct_token"
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+export function setToken(token: string | null): void {
+  if (token) localStorage.setItem(TOKEN_KEY, token)
+  else localStorage.removeItem(TOKEN_KEY)
+}
+
+api.interceptors.request.use((config) => {
+  const token = getToken()
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T
   error?: string
   message?: string
+}
+
+export interface LoginResponse {
+  token: string
+  user: AuthUser
+}
+
+export interface AuthUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  companyId?: string
+  lastLogin?: string
 }
 
 export interface Company {
@@ -55,6 +86,12 @@ export const apiTrips = {
 
 export const apiUsers = {
   getAll: () => api.get<ApiResponse<User[]>>("/api/users").then((res) => res.data)
+}
+
+export const apiAuth = {
+  login: (email: string, password: string) =>
+    api.post<ApiResponse<LoginResponse>>("/api/auth/login", { email, password }).then((res) => res.data),
+  me: () => api.get<ApiResponse<AuthUser>>("/api/auth/me").then((res) => res.data)
 }
 
 export default api

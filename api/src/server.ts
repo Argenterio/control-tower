@@ -7,6 +7,7 @@ import express from "express";
 import cors from "cors";
 import { dbService, rawDb } from "./database";
 import type { DatabaseService } from "./database";
+import { signToken, requireAuth, requireRole, ensureAdminUser, verifyPassword, type AuthPayload } from "./auth";
 import type {
   Company,
   User,
@@ -112,15 +113,80 @@ app.get("/", (req: express.Request, res: express.Response) => {
   res.send(html)
 })
 
+// === AUTH ROUTES ===
+// POST /api/auth/login - inicia sesión y devuelve JWT
+app.post("/api/auth/login", (req: express.Request, res: express.Response) => {
+  const { email, password } = req.body as { email?: string; password?: string };
+
+  if (!email || !password) {
+    res.status(400).json({ success: false, error: "email y password son requeridos" });
+    return;
+  }
+
+  const user = dbService.getUserByEmail(email as string);
+  if (!user || !user.password) {
+    res.status(401).json({ success: false, error: "Credenciales inválidas" });
+    return;
+  }
+
+  if (user.status !== "active") {
+    res.status(403).json({ success: false, error: "Usuario desactivado" });
+    return;
+  }
+
+  if (!verifyPassword(password as string, user.password)) {
+    res.status(401).json({ success: false, error: "Credenciales inválidas" });
+    return;
+  }
+
+  dbService.updateLastLogin(user.id);
+  const token = signToken({ id: user.id, email: user.email, role: user.role, companyId: user.companyId });
+
+  res.json({
+    success: true,
+    data: {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        companyId: user.companyId
+      }
+    }
+  } as ApiResponse<{ token: string; user: Partial<User> }>);
+});
+
+// GET /api/auth/me - devuelve el usuario del token actual
+app.get("/api/auth/me", requireAuth, (req: express.Request, res: express.Response) => {
+  const auth = res.locals.auth as AuthPayload;
+  const user = dbService.getUser(auth.sub);
+  if (!user) {
+    res.status(404).json({ success: false, error: "Usuario no encontrado" });
+    return;
+  }
+  res.json({
+    success: true,
+    data: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      companyId: user.companyId,
+      lastLogin: user.lastLogin
+    }
+  } as ApiResponse<Partial<User>>);
+});
+
 // === COMPANIES ROUTES ===
 // GET /api/companies
-app.get("/api/companies", (req: express.Request, res: express.Response) => {
+app.get("/api/companies", requireAuth, (req: express.Request, res: express.Response) => {
   const companies = dbService.getCompanies();
   res.json({ success: true, data: companies } as ApiResponse<Company[]>);
 });
 
 // GET /api/companies/:id
-app.get("/api/companies/:id", (req: express.Request, res: express.Response) => {
+app.get("/api/companies/:id", requireAuth, (req: express.Request, res: express.Response) => {
   const company = dbService.getCompany(req.params.id);
   if (company) {
     res.json({ success: true, data: company });
@@ -130,13 +196,13 @@ app.get("/api/companies/:id", (req: express.Request, res: express.Response) => {
 });
 
 // POST /api/companies
-app.post("/api/companies", (req: express.Request, res: express.Response) => {
+app.post("/api/companies", requireAuth, requireRole("admin"), (req: express.Request, res: express.Response) => {
   const company = dbService.createCompany(req.body);
   res.status(201).json({ success: true, data: company });
 });
 
 // PUT /api/companies/:id
-app.put("/api/companies/:id", (req: express.Request, res: express.Response) => {
+app.put("/api/companies/:id", requireAuth, requireRole("admin"), (req: express.Request, res: express.Response) => {
   const company = dbService.updateCompany(req.params.id, req.body);
   if (company) {
     res.json({ success: true, data: company });
@@ -146,13 +212,13 @@ app.put("/api/companies/:id", (req: express.Request, res: express.Response) => {
 });
 
 // === USERS ROUTES ===
-app.get("/api/users", (req: express.Request, res: express.Response) => {
+app.get("/api/users", requireAuth, (req: express.Request, res: express.Response) => {
   const companyId: string = req.query.companyId as string;
   const users = dbService.getUsers(companyId);
   res.json({ success: true, data: users } as ApiResponse<User[]>);
 });
 
-app.get("/api/users/:id", (req: express.Request, res: express.Response) => {
+app.get("/api/users/:id", requireAuth, (req: express.Request, res: express.Response) => {
   const user = dbService.getUser(req.params.id);
   if (user) {
     res.json({ success: true, data: user });
@@ -161,19 +227,19 @@ app.get("/api/users/:id", (req: express.Request, res: express.Response) => {
   }
 });
 
-app.post("/api/users", (req: express.Request, res: express.Response) => {
+app.post("/api/users", requireAuth, requireRole("admin"), (req: express.Request, res: express.Response) => {
   const user = dbService.createUser(req.body);
   res.status(201).json({ success: true, data: user });
 });
 
 // === VEHICLES ROUTES ===
-app.get("/api/vehicles", (req: express.Request, res: express.Response) => {
+app.get("/api/vehicles", requireAuth, (req: express.Request, res: express.Response) => {
   const companyId: string = req.query.companyId as string;
   const vehicles = dbService.getVehicles(companyId);
   res.json({ success: true, data: vehicles } as ApiResponse<Vehicle[]>);
 });
 
-app.get("/api/vehicles/:id", (req: express.Request, res: express.Response) => {
+app.get("/api/vehicles/:id", requireAuth, (req: express.Request, res: express.Response) => {
   const vehicle = dbService.getVehicle(req.params.id);
   if (vehicle) {
     res.json({ success: true, data: vehicle });
@@ -182,19 +248,19 @@ app.get("/api/vehicles/:id", (req: express.Request, res: express.Response) => {
   }
 });
 
-app.post("/api/vehicles", (req: express.Request, res: express.Response) => {
+app.post("/api/vehicles", requireAuth, (req: express.Request, res: express.Response) => {
   const vehicle = dbService.createVehicle(req.body);
   res.status(201).json({ success: true, data: vehicle });
 });
 
 // === DRIVERS ROUTES ===
-app.get("/api/drivers", (req: express.Request, res: express.Response) => {
+app.get("/api/drivers", requireAuth, (req: express.Request, res: express.Response) => {
   const companyId: string = req.query.companyId as string;
   const drivers = dbService.getDrivers(companyId);
   res.json({ success: true, data: drivers } as ApiResponse<Driver[]>);
 });
 
-app.get("/api/drivers/:id", (req: express.Request, res: express.Response) => {
+app.get("/api/drivers/:id", requireAuth, (req: express.Request, res: express.Response) => {
   const driver = dbService.getDriver(req.params.id);
   if (driver) {
     res.json({ success: true, data: driver });
@@ -203,25 +269,25 @@ app.get("/api/drivers/:id", (req: express.Request, res: express.Response) => {
   }
 });
 
-app.post("/api/drivers", (req: express.Request, res: express.Response) => {
+app.post("/api/drivers", requireAuth, (req: express.Request, res: express.Response) => {
   const driver = dbService.createDriver(req.body);
   res.status(201).json({ success: true, data: driver });
 });
 
 // === CUSTOMERS ROUTES ===
-app.get("/api/customers", (req: express.Request, res: express.Response) => {
+app.get("/api/customers", requireAuth, (req: express.Request, res: express.Response) => {
   const companyId: string = req.query.companyId as string;
   const customers = dbService.getCustomers(companyId);
   res.json({ success: true, data: customers } as ApiResponse<Customer[]>);
 });
 
-app.post("/api/customers", (req: express.Request, res: express.Response) => {
+app.post("/api/customers", requireAuth, (req: express.Request, res: express.Response) => {
   const customer = dbService.createCustomer(req.body);
   res.status(201).json({ success: true, data: customer });
 });
 
 // === TRIPS ROUTES ===
-app.get("/api/trips", (req: express.Request, res: express.Response) => {
+app.get("/api/trips", requireAuth, (req: express.Request, res: express.Response) => {
   const companyId: string = req.query.companyId as string;
   const filters: TripFilters = {};
   if (req.query.status) filters.status = req.query.status as string;
@@ -230,7 +296,7 @@ app.get("/api/trips", (req: express.Request, res: express.Response) => {
   res.json({ success: true, data: trips } as ApiResponse<Trip[]>);
 });
 
-app.get("/api/trips/:id", (req: express.Request, res: express.Response) => {
+app.get("/api/trips/:id", requireAuth, (req: express.Request, res: express.Response) => {
   const trip = dbService.getTrip(req.params.id);
   if (trip) {
     res.json({ success: true, data: trip });
@@ -239,13 +305,13 @@ app.get("/api/trips/:id", (req: express.Request, res: express.Response) => {
   }
 });
 
-app.post("/api/trips", (req: express.Request, res: express.Response) => {
+app.post("/api/trips", requireAuth, (req: express.Request, res: express.Response) => {
   const trip = dbService.createTrip(req.body);
   res.status(201).json({ success: true, data: trip });
 });
 
 // GPS Position route
-app.post("/api/gps-position", (req: express.Request, res: express.Response) => {
+app.post("/api/gps-position", requireAuth, (req: express.Request, res: express.Response) => {
   const { tripId, latitude, longitude, speed } = req.body;
 
   if (!tripId || latitude === undefined || longitude === undefined) {
@@ -262,7 +328,7 @@ app.post("/api/gps-position", (req: express.Request, res: express.Response) => {
 });
 
 // ETA calculation route
-app.post("/api/calculate-eta", (req: express.Request, res: express.Response) => {
+app.post("/api/calculate-eta", requireAuth, (req: express.Request, res: express.Response) => {
   const { origin, destination } = req.body;
 
   if (!origin || !destination) {
@@ -279,6 +345,7 @@ app.post("/api/calculate-eta", (req: express.Request, res: express.Response) => 
 });
 
 // Start server
+ensureAdminUser();
 const server = app.listen(port, () => {
   console.log("Control Tower API running on port " + port);
   console.log("Environment: " + (process.env.NODE_ENV || "development"));
