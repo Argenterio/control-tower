@@ -8,6 +8,7 @@ import cors from "cors";
 import { dbService, rawDb } from "./database";
 import type { DatabaseService } from "./database";
 import { signToken, requireAuth, requireRole, ensureAdminUser, verifyPassword, type AuthPayload } from "./auth";
+import { seedDemoData } from "./seed";
 import type {
   Company,
   User,
@@ -398,6 +399,7 @@ app.get("/api/dashboard/summary", requireAuth, (req: express.Request, res: expre
 
 // Start server
 ensureAdminUser();
+seedDemoData();
 const server = app.listen(port, () => {
   console.log("Control Tower API running on port " + port);
   console.log("Environment: " + (process.env.NODE_ENV || "development"));
