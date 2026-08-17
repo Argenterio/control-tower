@@ -210,6 +210,21 @@ class ApiClient {
     throw new Error(res.data.error || 'Error al cargar documento');
   }
 
+  // === FUEL / COMBUSTIBLE ===
+  async getFuelEntries(companyId: string): Promise<any[]> {
+    const res = await this.http.get<ApiResponse<any[]>>('/api/fuel', {
+      params: { companyId }
+    });
+    if (res.data.success && res.data.data) return res.data.data;
+    return [];
+  }
+
+  async createFuelEntry(data: any): Promise<any> {
+    const res = await this.http.post<ApiResponse<any>>('/api/fuel', data);
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Error al cargar ticket de combustible');
+  }
+
   // === HEALTH ===
   async healthCheck(): Promise<boolean> {
     try {

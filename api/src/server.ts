@@ -368,6 +368,19 @@ app.post("/api/documents", requireAuth, (req: express.Request, res: express.Resp
   res.status(201).json({ success: true, data: doc, message: "Documento cargado correctamente" });
 });
 
+// === FUEL ROUTES ===
+app.get("/api/fuel", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const entries = dbService.getFuelEntries(companyId);
+  res.json({ success: true, data: entries });
+});
+
+app.post("/api/fuel", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = req.body.companyId || (res.locals.auth?.companyId) || "default-company";
+  const entry = dbService.createFuelEntry({ ...req.body, companyId });
+  res.status(201).json({ success: true, data: entry, message: "Ticket de combustible registrado" });
+});
+
 // GPS Position route
 app.post("/api/gps-position", requireAuth, (req: express.Request, res: express.Response) => {
   const { tripId, latitude, longitude, speed } = req.body;

@@ -180,6 +180,22 @@ export function seedDemoData() {
     `).run(doc.id, companyId, doc.vehicleId, doc.driverId, doc.type, doc.title, doc.fileUrl, doc.expiryDate, doc.status);
   }
 
+  // 9. Cargas de Combustible
+  const fuelEntries = [
+    { id: "F-101", vehicleId: "veh-01", driverId: "drv-01", station: "YPF Directo Zárate", liters: 480, pricePerLiter: 1120, totalAmount: 537600, kmAtFill: 142500, consumption: 34.2, anomaly: 0, date: "2026-08-16" },
+    { id: "F-102", vehicleId: "veh-02", driverId: "drv-02", station: "Shell Leones (RN9)", liters: 520, pricePerLiter: 1150, totalAmount: 598000, kmAtFill: 218900, consumption: 35.8, anomaly: 0, date: "2026-08-15" },
+    { id: "F-103", vehicleId: "veh-03", driverId: "drv-03", station: "Axion San Nicolás", liters: 610, pricePerLiter: 1130, totalAmount: 689300, kmAtFill: 98400, consumption: 42.1, anomaly: 1, date: "2026-08-15" },
+    { id: "F-104", vehicleId: "veh-04", driverId: "drv-04", station: "Puma Rosario Sur", liters: 450, pricePerLiter: 1090, totalAmount: 490500, kmAtFill: 312000, consumption: 33.9, anomaly: 0, date: "2026-08-14" },
+    { id: "F-105", vehicleId: "veh-05", driverId: "drv-05", station: "YPF Villa María", liters: 490, pricePerLiter: 1120, totalAmount: 548800, kmAtFill: 176300, consumption: 34.5, anomaly: 0, date: "2026-08-14" },
+  ];
+
+  for (const f of fuelEntries) {
+    rawDb.prepare(`
+      INSERT OR REPLACE INTO fuel_entries (id, companyId, vehicleId, driverId, station, liters, pricePerLiter, totalAmount, kmAtFill, consumptionLPer100Km, anomaly, date, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).run(f.id, companyId, f.vehicleId, f.driverId, f.station, f.liters, f.pricePerLiter, f.totalAmount, f.kmAtFill, f.consumption, f.anomaly, f.date);
+  }
+
   console.log("🏁 Carga de datos demo completada con éxito. Listo para demostración a transportistas.");
 }
 
