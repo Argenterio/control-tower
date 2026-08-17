@@ -5,6 +5,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import Sidebar from './components/Layout/Sidebar';
 
 // Pages
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/Login';
 import DashboardPage from './pages/Dashboard';
 import FleetPage from './pages/Fleet';
@@ -24,19 +25,18 @@ export default function App() {
       <ToastProvider>
         <BrowserRouter>
         <Routes>
-          {/* Public Route */}
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
 
           {/* Protected Routes inside Sidebar Layout */}
           <Route
-            path="/"
             element={
               <ProtectedRoute>
                 <Sidebar />
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="map" element={<MapPage />} />
             <Route path="trips" element={<TripsPage />} />
