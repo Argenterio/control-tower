@@ -90,7 +90,7 @@ export interface Trip {
   customerId?: string;
   origin: string;
   destination: string;
-  status: "pending" | "en_route" | "completed" | "delayed" | "cancelled";
+  status: "pending" | "loading" | "en_route" | "arrived" | "unloading" | "completed" | "delayed" | "cancelled";
   startTime?: string;
   endTime?: string;
   estimatedArrival: string;
@@ -262,4 +262,94 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+}
+
+// ===== WhatsApp Integration Types =====
+
+// Tipos de mensaje soportados
+export type WhatsappMessageType = "text" | "image" | "audio" | "location" | "document" | "video" | "sticker" | "contact";
+
+// Dirección del mensaje
+export type WhatsappDirection = "incoming" | "outgoing";
+
+// Acciones interpretadas del mensaje del chofer
+export type InterpretedAction =
+  | "trip_departure"    // "Salí", "Arrancando", "En camino"
+  | "trip_arrival"      // "Llegué", "Estoy en destino"
+  | "loading"           // "Estoy cargando"
+  | "unloading"         // "Estoy descargando"
+  | "delay"             // "Demora", "Estoy parado", "Tránsito"
+  | "breakdown"         // "Se rompió", "Avería", "Problema mecánico"
+  | "accident"          // "Accidente", "Choque"
+  | "tire_issue"        // "Cubierta", "Goma pinchada"
+  | "fuel_stop"         // "Cargando combustible", "Estación de servicio"
+  | "document_upload"   // Foto de remito, ticket, etc.
+  | "location_share"    // Ubicación compartida
+  | "greeting"          // "Hola", "Buenos días"
+  | "status_query"      // "¿Cómo va mi viaje?", "¿Qué viaje tengo?"
+  | "unknown";          // No se pudo interpretar
+
+// Mensaje de WhatsApp almacenado
+export interface WhatsappMessage {
+  id: string;
+  companyId: string;
+  driverId?: string;
+  phone: string;
+  direction: WhatsappDirection;
+  messageType: WhatsappMessageType;
+  content?: string;
+  mediaUrl?: string;
+  interpretedAction?: InterpretedAction;
+  interpretedConfidence?: number;
+  tripId?: string;
+  processed: boolean;
+  processedAt?: string;
+  rawPayload?: string;
+  responseMessage?: string;
+  createdAt: string;
+}
+
+// Payload que llega desde n8n con el mensaje de Evolution API
+export interface WhatsappIncomingPayload {
+  phone: string;          // Número del remitente (ej: "5491144551122")
+  message?: string;       // Contenido de texto
+  messageType: WhatsappMessageType;
+  mediaUrl?: string;      // URL del archivo si es imagen/audio/doc
+  latitude?: number;      // Si es ubicación
+  longitude?: number;     // Si es ubicación
+  timestamp?: string;     // Timestamp del mensaje
+  pushName?: string;      // Nombre del contacto en WhatsApp
+  messageId?: string;     // ID del mensaje en WhatsApp
+  instanceName?: string;  // Nombre de la instancia en Evolution API
+  rawPayload?: string;    // JSON completo original
+}
+
+// Resultado de interpretar un mensaje
+export interface MessageInterpretation {
+  action: InterpretedAction;
+  confidence: number;        // 0.0 a 1.0
+  tripUpdate?: {
+    tripId: string;
+    newStatus: string;
+  };
+  incident?: {
+    type: string;
+    description: string;
+  };
+  gpsPosition?: {
+    latitude: number;
+    longitude: number;
+  };
+  responseMessage: string;   // Mensaje de vuelta al chofer
+}
+
+// Respuesta del endpoint de WhatsApp
+export interface WhatsappProcessResult {
+  messageId: string;
+  driverFound: boolean;
+  driverName?: string;
+  companyId?: string;
+  interpretation: MessageInterpretation;
+  tripUpdated: boolean;
+  incidentCreated: boolean;
 }

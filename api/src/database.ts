@@ -364,6 +364,35 @@ db.exec(`
 `);
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_company_settings_companyId ON company_settings(companyId)`);
 
+// Tabla de mensajes de WhatsApp
+db.exec(`
+  CREATE TABLE IF NOT EXISTS whatsapp_messages (
+    id TEXT PRIMARY KEY,
+    companyId TEXT NOT NULL,
+    driverId TEXT,
+    phone TEXT NOT NULL,
+    direction TEXT DEFAULT 'incoming',
+    messageType TEXT DEFAULT 'text',
+    content TEXT,
+    mediaUrl TEXT,
+    interpretedAction TEXT,
+    interpretedConfidence REAL,
+    tripId TEXT,
+    processed INTEGER DEFAULT 0,
+    processedAt TEXT,
+    rawPayload TEXT,
+    responseMessage TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (driverId) REFERENCES drivers(id) ON DELETE SET NULL,
+    FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE SET NULL
+  )
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_companyId ON whatsapp_messages(companyId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_phone ON whatsapp_messages(phone)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_driverId ON whatsapp_messages(driverId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_tripId ON whatsapp_messages(tripId)`);
+
 // Insertar empresa por defecto
 db.exec(`
   INSERT OR IGNORE INTO companies (id, name, email, phone, address, status)
@@ -464,7 +493,7 @@ export type Trip = {
   customerId?: string;
   origin: string;
   destination: string;
-  status: "pending" | "en_route" | "completed" | "delayed" | "cancelled";
+  status: "pending" | "loading" | "en_route" | "arrived" | "unloading" | "completed" | "delayed" | "cancelled";
   startTime?: string;
   endTime?: string;
   estimatedArrival: string;
@@ -627,6 +656,26 @@ export type ApiResponse<T> = {
   data?: T;
   error?: string;
   message?: string;
+};
+
+// ===== WhatsApp Message type for database =====
+export type WhatsappMessageRow = {
+  id: string;
+  companyId: string;
+  driverId?: string;
+  phone: string;
+  direction: string;
+  messageType: string;
+  content?: string;
+  mediaUrl?: string;
+  interpretedAction?: string;
+  interpretedConfidence?: number;
+  tripId?: string;
+  processed: number; // SQLite uses 0/1 for booleans
+  processedAt?: string;
+  rawPayload?: string;
+  responseMessage?: string;
+  createdAt: string;
 };
 
 // Database Service class with typed methods
@@ -863,6 +912,141 @@ export class DatabaseService {
       estimatedTimeHours,
       estimatedSpeed
     };
+  }
+
+  // ===== WhatsApp Methods =====
+
+  // Buscar chofer por número de teléfono (normaliza el formato)
+  findDriverByPhone(phone: string): (Driver & { companyName?: string }) | null {
+    // Normalizar: quitar espacios, guiones, +, y dejar solo dígitos
+    const digits = phone.replace(/[\s\-\+\(\)]/g, "");
+    
+    // Buscar con LIKE para tolerar diferencias de formato
+    // Intentamos varias formas: exacta, últimos 10 dígitos, con prefijo 549
+    const queries = [
+      "SELECT d.*, c.name as companyName FROM drivers d JOIN companies c ON d.companyId = c.id WHERE REPLACE(REPLACE(REPLACE(REPLACE(d.phone, ' ', ''), '-', ''), '+', ''), '(', '') LIKE ?",
+    ];
+    
+    // Intentar con los dígitos completos
+    for (const q of queries) {
+      const row = this.db.prepare(q).get(`%${digits.slice(-10)}%`) as any;
+      if (row) {
+        return { ...row } as Driver & { companyName?: string };
+      }
+    }
+    
+    return null;
+  }
+
+  // Obtener viaje activo de un chofer (en_route, loading, pending, delayed)
+  getActiveTrip(driverId: string): Trip | null {
+    const row = this.db.prepare(
+      "SELECT * FROM trips WHERE driverId = ? AND status IN ('pending', 'loading', 'en_route', 'arrived', 'unloading', 'delayed') ORDER BY createdAt DESC LIMIT 1"
+    ).get(driverId) as any;
+    
+    if (!row) return null;
+    return { ...row } as Trip;
+  }
+
+  // Actualizar estado de un viaje
+  updateTripStatus(tripId: string, newStatus: string, notes?: string): Trip {
+    const now = new Date().toISOString();
+    let updateQuery = "UPDATE trips SET status = ?, updatedAt = ?";
+    const params: any[] = [newStatus, now];
+
+    // Si es departure, registrar startTime
+    if (newStatus === "en_route") {
+      updateQuery += ", startTime = ?";
+      params.push(now);
+    }
+
+    // Si es arrival o completed, registrar actualArrival
+    if (newStatus === "arrived" || newStatus === "completed") {
+      updateQuery += ", actualArrival = ?";
+      params.push(now);
+    }
+
+    // Si es completed, registrar endTime
+    if (newStatus === "completed") {
+      updateQuery += ", endTime = ?";
+      params.push(now);
+    }
+
+    // Agregar notas si existen
+    if (notes) {
+      updateQuery += ", notes = COALESCE(notes || ' | ', '') || ?";
+      params.push(`[WhatsApp ${now}] ${notes}`);
+    }
+
+    updateQuery += " WHERE id = ?";
+    params.push(tripId);
+
+    this.db.prepare(updateQuery).run(...params);
+    return this.getTrip(tripId);
+  }
+
+  // Guardar mensaje de WhatsApp
+  createWhatsappMessage(msg: {
+    companyId: string;
+    driverId?: string;
+    phone: string;
+    direction: string;
+    messageType: string;
+    content?: string;
+    mediaUrl?: string;
+    interpretedAction?: string;
+    interpretedConfidence?: number;
+    tripId?: string;
+    processed: boolean;
+    rawPayload?: string;
+    responseMessage?: string;
+  }): WhatsappMessageRow {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    
+    this.db.prepare(`
+      INSERT INTO whatsapp_messages (id, companyId, driverId, phone, direction, messageType, content, mediaUrl, interpretedAction, interpretedConfidence, tripId, processed, processedAt, rawPayload, responseMessage, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, msg.companyId, msg.driverId || null, msg.phone, msg.direction, msg.messageType,
+      msg.content || null, msg.mediaUrl || null, msg.interpretedAction || null,
+      msg.interpretedConfidence || null, msg.tripId || null,
+      msg.processed ? 1 : 0, msg.processed ? now : null,
+      msg.rawPayload || null, msg.responseMessage || null, now
+    );
+    
+    return this.db.prepare("SELECT * FROM whatsapp_messages WHERE id = ?").get(id) as WhatsappMessageRow;
+  }
+
+  // Crear incidente desde mensaje de WhatsApp
+  createIncidentFromWhatsapp(data: {
+    companyId: string;
+    vehicleId?: string;
+    driverId: string;
+    type: string;
+    description: string;
+    location?: string;
+  }): Incident {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    
+    this.db.prepare(`
+      INSERT INTO incidents (id, companyId, vehicleId, driverId, type, title, description, location, occurredAt, status, reportedBy, reportedAt, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 'whatsapp', ?, ?, ?)
+    `).run(
+      id, data.companyId, data.vehicleId || null, data.driverId,
+      data.type, `[WhatsApp] ${data.type}`, data.description,
+      data.location || null, now, now, now, now
+    );
+    
+    return this.db.prepare("SELECT * FROM incidents WHERE id = ?").get(id) as Incident;
+  }
+
+  // Listar mensajes de WhatsApp de una empresa
+  getWhatsappMessages(companyId: string, limit: number = 50): WhatsappMessageRow[] {
+    return this.db.prepare(
+      "SELECT * FROM whatsapp_messages WHERE companyId = ? ORDER BY createdAt DESC LIMIT ?"
+    ).all(companyId, limit) as WhatsappMessageRow[];
   }
 }
 

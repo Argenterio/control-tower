@@ -106,12 +106,12 @@ export function seedDemoData() {
 
   // 5. Choferes Profesionales
   const drivers = [
-    { id: "drv-01", name: "Carlos Rodríguez", dni: "28.349.120", phone: "+54 9 11 4455-1122", license: "LNH-28349120", expiry: "2026-11-20", trips: 142, km: 185000 },
+    { id: "drv-01", name: "Gustavo (Director/Chofer Demo)", dni: "28.349.120", phone: "+54 9 11 2390-6673", license: "LNH-28349120", expiry: "2026-11-20", trips: 142, km: 185000 },
     { id: "drv-02", name: "Martín Benítez", dni: "31.902.441", phone: "+54 9 341 556-3344", license: "LNH-31902441", expiry: "2026-08-28", trips: 118, km: 154000 },
     { id: "drv-03", name: "Lucas Gómez", dni: "33.102.941", phone: "+54 9 351 667-8899", license: "LNH-33102941", expiry: "2027-05-10", trips: 94, km: 122000 },
     { id: "drv-04", name: "Fernando Maidana", dni: "26.419.002", phone: "+54 9 11 6789-0011", license: "LNH-26419002", expiry: "2026-12-15", trips: 210, km: 290000 },
     { id: "drv-05", name: "Diego Álvarez", dni: "29.883.112", phone: "+54 9 221 445-6677", license: "LNH-29883112", expiry: "2027-01-22", trips: 135, km: 176000 },
-    { id: "drv-06", name: "Gustavo Pereyra", dni: "27.550.319", phone: "+54 9 336 412-3344", license: "LNH-27550319", expiry: "2026-10-30", trips: 165, km: 220000 },
+    { id: "drv-06", name: "Carlos Rodríguez", dni: "27.550.319", phone: "+54 9 11 4455-1122", license: "LNH-27550319", expiry: "2026-10-30", trips: 165, km: 220000 },
     { id: "drv-07", name: "Mariano Soria", dni: "34.220.891", phone: "+54 9 261 554-1122", license: "LNH-34220891", expiry: "2027-03-18", trips: 82, km: 98000 },
     { id: "drv-08", name: "Jorge Carrizo", dni: "25.109.448", phone: "+54 9 381 442-9900", license: "LNH-25109448", expiry: "2026-09-14", trips: 240, km: 340000 },
     { id: "drv-09", name: "Pablo Romero", dni: "30.441.782", phone: "+54 9 291 556-7788", license: "LNH-30441782", expiry: "2027-04-05", trips: 110, km: 140000 },

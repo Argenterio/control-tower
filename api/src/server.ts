@@ -9,6 +9,7 @@ import { dbService, rawDb } from "./database";
 import type { DatabaseService } from "./database";
 import { signToken, requireAuth, requireRole, ensureAdminUser, verifyPassword, type AuthPayload } from "./auth";
 import { seedDemoData } from "./seed";
+import { processIncomingWhatsappMessage } from "./whatsapp";
 import type {
   Company,
   User,
@@ -26,7 +27,9 @@ import type {
   TireRecord,
   CompanySettings,
   TripFilters,
-  ApiResponse
+  ApiResponse,
+  WhatsappIncomingPayload,
+  WhatsappProcessResult
 } from "./types";
 
 // Initialize express
@@ -394,6 +397,91 @@ app.get("/api/dashboard/summary", requireAuth, (req: express.Request, res: expre
       }
     }
   });
+});
+
+// === WHATSAPP BOT & WEBHOOK ROUTES ===
+
+// POST /api/whatsapp/incoming - Webhook receptor de mensajes desde n8n / Evolution API
+app.post("/api/whatsapp/incoming", async (req: express.Request, res: express.Response) => {
+  try {
+    const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
+    const providedSecret = req.headers["x-webhook-secret"] as string;
+
+    // Validación opcional de secreto si está configurado en env
+    if (webhookSecret && providedSecret !== webhookSecret) {
+      return res.status(401).json({ success: false, error: "Token de webhook no autorizado" });
+    }
+
+    const payload = req.body as WhatsappIncomingPayload;
+    if (!payload.phone) {
+      return res.status(400).json({ success: false, error: "El campo 'phone' es requerido" });
+    }
+
+    const result = await processIncomingWhatsappMessage(payload);
+    res.json({
+      success: true,
+      data: result,
+      responseMessage: result.interpretation.responseMessage
+    });
+  } catch (error) {
+    console.error("Error procesando webhook de WhatsApp:", error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Error interno al procesar mensaje"
+    });
+  }
+});
+
+// GET /api/whatsapp/messages - Historial de mensajes de WhatsApp de la empresa
+app.get("/api/whatsapp/messages", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+  const messages = dbService.getWhatsappMessages(companyId, limit);
+  res.json({ success: true, data: messages });
+});
+
+// GET /api/whatsapp/status - Estado del canal de WhatsApp
+app.get("/api/whatsapp/status", (req: express.Request, res: express.Response) => {
+  res.json({
+    success: true,
+    data: {
+      status: "online",
+      n8nUrl: "https://manager.generarise.space",
+      evolutionUrl: "https://trafic.generarise.space/manager",
+      apiUrl: "https://api.generarise.space/api/whatsapp/incoming",
+      activeCompanyId: "default-company",
+      supportedTypes: ["text", "image", "location", "document"],
+      timestamp: new Date().toISOString()
+    }
+  });
+});
+
+// POST /api/whatsapp/simulate - Endpoint para simular mensaje de chofer desde el Frontend
+app.post("/api/whatsapp/simulate", requireAuth, async (req: express.Request, res: express.Response) => {
+  try {
+    const { phone, message, messageType, latitude, longitude } = req.body;
+    const payload: WhatsappIncomingPayload = {
+      phone: phone || "+54 9 11 4455-1122", // Default: Carlos Rodríguez
+      message: message || "Salí hacia Córdoba",
+      messageType: messageType || "text",
+      latitude,
+      longitude,
+      timestamp: new Date().toISOString(),
+      rawPayload: JSON.stringify({ simulated: true, timestamp: new Date().toISOString() })
+    };
+
+    const result = await processIncomingWhatsappMessage(payload);
+    res.json({
+      success: true,
+      data: result,
+      responseMessage: result.interpretation.responseMessage
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Error al simular mensaje"
+    });
+  }
 });
 
 
