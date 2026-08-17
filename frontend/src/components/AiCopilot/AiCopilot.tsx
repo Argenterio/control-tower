@@ -24,7 +24,7 @@ export function AiCopilot() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: '¡Hola! Soy tu **Copiloto IA Gemini** para Control Tower. Tengo acceso en tiempo real a tus camiones, choferes, viajes, combustible, taller y documentos legales.\n\n¿En qué te puedo ayudar hoy?',
+      content: '¡Hola! Soy tu **Copiloto Operativo Inteligente** de Control Tower. Tengo acceso en tiempo real a tus camiones, choferes, viajes, combustible, taller y documentos legales.\n\n¿En qué te puedo ayudar hoy?',
       timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -54,7 +54,7 @@ export function AiCopilot() {
     } catch (err: any) {
       const errorMsg: Message = {
         role: 'assistant',
-        content: `⚠️ Error al consultar el modelo de IA: ${err.message || 'Error desconocido'}`,
+        content: `⚠️ Error al consultar el asistente operativo: ${err.message || 'Error de conexión'}`,
         timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -89,12 +89,12 @@ export function AiCopilot() {
           zIndex: 9990,
           transition: 'all 0.3s ease'
         }}
-        title="Abrir Copiloto IA Gemini"
+        title="Abrir Copiloto IA Operativo"
       >
         <Sparkles size={20} className="ai-icon-spin" />
         <span>Copiloto IA</span>
         <span style={{ fontSize: 10, background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 10, textTransform: 'uppercase' }}>
-          Gemini 2.0
+          PRO
         </span>
       </button>
 
@@ -146,7 +146,7 @@ export function AiCopilot() {
                     ONLINE
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>Potenciado por Google Gemini 2.0 Flash</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>Inteligencia Operativa en Tiempo Real</div>
               </div>
             </div>
             <button
@@ -203,7 +203,7 @@ export function AiCopilot() {
                 border: '1px solid #334155'
               }}>
                 <RefreshCw size={14} className="spin-slow" />
-                Analizando base operativa con Gemini...
+                Analizando base operativa en tiempo real...
               </div>
             )}
           </div>
