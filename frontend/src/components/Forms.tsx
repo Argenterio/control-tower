@@ -12,13 +12,26 @@ interface VehicleFormProps {
   onCreated: (v: Vehicle) => void;
 }
 
+interface VehicleFormState {
+  licensePlate: string;
+  brand: string;
+  model: string;
+  type: 'truck' | 'van' | 'motorcycle';
+  status: 'active' | 'inactive' | 'maintenance' | 'out_of_service';
+  kmTotal: number;
+}
+
 export function AddVehicleForm({ isOpen, onClose, onCreated }: VehicleFormProps) {
   const { companyId } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({
-    licensePlate: '', brand: '', model: '', type: 'truck' as const,
-    status: 'active' as const, kmTotal: 0,
+  const [form, setForm] = useState<VehicleFormState>({
+    licensePlate: '',
+    brand: '',
+    model: '',
+    type: 'truck',
+    status: 'active',
+    kmTotal: 0,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,13 +92,28 @@ interface DriverFormProps {
   onCreated: (d: Driver) => void;
 }
 
+interface DriverFormState {
+  fullName: string;
+  dni: string;
+  phone: string;
+  email: string;
+  licenseNumber: string;
+  licenseExpiry: string;
+  status: 'active' | 'inactive' | 'suspended';
+}
+
 export function AddDriverForm({ isOpen, onClose, onCreated }: DriverFormProps) {
   const { companyId } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({
-    fullName: '', dni: '', phone: '', email: '',
-    licenseNumber: '', licenseExpiry: '', status: 'active' as const,
+  const [form, setForm] = useState<DriverFormState>({
+    fullName: '',
+    dni: '',
+    phone: '',
+    email: '',
+    licenseNumber: '',
+    licenseExpiry: '',
+    status: 'active',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
