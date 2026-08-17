@@ -308,8 +308,9 @@ Pregunta del operador de tráfico:
     const answer = await callGemini(prompt, systemInstruction, 0.3);
     return { answer, sources: contextData };
   } catch (err: any) {
+    console.error("[Fleet Assistant error]:", err.message);
     return {
-      answer: `⚠️ No pude procesar la consulta con Gemini en este momento (${err.message}). Por favor verificá el estado de la conexión.`,
+      answer: `⚠️ No pude procesar la consulta con la IA en este momento (${err.message}). Por favor verificá que la clave del proveedor IA (GROQ_API_KEY o GEMINI_API_KEY) esté configurada en las variables de entorno.`,
       sources: null
     };
   }
