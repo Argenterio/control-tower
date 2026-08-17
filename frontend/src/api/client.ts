@@ -62,13 +62,18 @@ class ApiClient {
 
   // === AUTH ===
   async login(email: string, password: string): Promise<AuthResponse> {
-    const res = await this.http.post<ApiResponse<AuthResponse>>('/api/auth/login', { email, password });
-    if (res.data.success && res.data.data) {
-      this.setToken(res.data.data.token);
-      localStorage.setItem('ct_user', JSON.stringify(res.data.data.user));
-      return res.data.data;
+    try {
+      const res = await this.http.post<ApiResponse<AuthResponse>>('/api/auth/login', { email, password });
+      if (res.data.success && res.data.data) {
+        this.setToken(res.data.data.token);
+        localStorage.setItem('ct_user', JSON.stringify(res.data.data.user));
+        return res.data.data;
+      }
+      throw new Error(res.data.error || 'Credenciales inválidas');
+    } catch (err: any) {
+      const msg = err.response?.data?.error || (err.message === 'Network Error' ? 'Error de conexión al servidor (verificá que la API esté desplegada)' : err.message);
+      throw new Error(msg);
     }
-    throw new Error(res.data.error || 'Login failed');
   }
 
   async getMe(): Promise<User> {
