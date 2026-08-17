@@ -7,6 +7,7 @@ import {
   Fuel, Wrench, FileText, AlertTriangle, Map,
   Settings, LogOut, ChevronLeft, ChevronRight, Radio
 } from 'lucide-react';
+import { AiCopilot } from '../AiCopilot/AiCopilot';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -92,6 +93,8 @@ export default function Sidebar() {
       <main className="main-content">
         <Outlet />
       </main>
+
+      <AiCopilot />
     </div>
   );
 }

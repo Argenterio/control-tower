@@ -2,6 +2,7 @@
 // Conecta Evolution API (vía n8n) con Control Tower
 
 import { dbService } from "./database";
+import { interpretDriverMessageWithAI } from "./ai";
 import type {
   WhatsappIncomingPayload,
   WhatsappProcessResult,
@@ -293,8 +294,22 @@ export async function processIncomingWhatsappMessage(
   // 2. Buscar viaje activo del chofer
   const activeTrip = driver ? dbService.getActiveTrip(driver.id) : null;
 
-  // 3. Interpretar el mensaje
-  const interpretation = interpretDriverMessage(rawText, payload, driver, activeTrip);
+  // 3. Interpretar el mensaje (Primero con Gemini AI, con fallback al parser de reglas)
+  let interpretation: MessageInterpretation | null = null;
+  
+  // Si no es un mensaje binario (como solo GPS o imagen pura), probamos con Gemini Flash
+  if (rawText && payload.messageType !== "location") {
+    try {
+      interpretation = await interpretDriverMessageWithAI(rawText, driver, activeTrip);
+    } catch (e) {
+      console.warn("AI interpretation failed, using deterministic parser:", e);
+    }
+  }
+
+  // Fallback si la IA falló o si es un mensaje de GPS/Imagen
+  if (!interpretation) {
+    interpretation = interpretDriverMessage(rawText, payload, driver, activeTrip);
+  }
 
   let tripUpdated = false;
   let incidentCreated = false;

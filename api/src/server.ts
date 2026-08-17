@@ -10,6 +10,7 @@ import type { DatabaseService } from "./database";
 import { signToken, requireAuth, requireRole, ensureAdminUser, verifyPassword, type AuthPayload } from "./auth";
 import { seedDemoData } from "./seed";
 import { processIncomingWhatsappMessage } from "./whatsapp";
+import { askFleetAssistant } from "./ai";
 import type {
   Company,
   User,
@@ -379,6 +380,23 @@ app.post("/api/fuel", requireAuth, (req: express.Request, res: express.Response)
   const companyId = req.body.companyId || (res.locals.auth?.companyId) || "default-company";
   const entry = dbService.createFuelEntry({ ...req.body, companyId });
   res.status(201).json({ success: true, data: entry, message: "Ticket de combustible registrado" });
+});
+
+// === AI COPILOT ROUTE ===
+app.post("/api/ai/chat", requireAuth, async (req: express.Request, res: express.Response) => {
+  const companyId = req.body.companyId || (res.locals.auth?.companyId) || "default-company";
+  const question = req.body.question || req.body.message;
+
+  if (!question) {
+    return res.status(400).json({ success: false, error: "Pregunta o mensaje es requerido" });
+  }
+
+  try {
+    const result = await askFleetAssistant(companyId, question);
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Error al consultar al copiloto IA" });
+  }
 });
 
 // GPS Position route

@@ -1060,6 +1060,13 @@ export class DatabaseService {
     ).all(companyId, limit) as WhatsappMessageRow[];
   }
 
+  // Listar incidentes de una empresa
+  getIncidents(companyId: string): Incident[] {
+    return this.db.prepare(
+      "SELECT * FROM incidents WHERE companyId = ? ORDER BY createdAt DESC"
+    ).all(companyId) as Incident[];
+  }
+
   // ===== Maintenance Methods =====
   getMaintenance(companyId: string): (Maintenance & { vehiclePlate?: string; driverName?: string })[] {
     return this.db.prepare(`

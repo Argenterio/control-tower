@@ -225,6 +225,16 @@ class ApiClient {
     throw new Error(res.data.error || 'Error al cargar ticket de combustible');
   }
 
+  // === AI COPILOT ===
+  async askAiCopilot(companyId: string, question: string): Promise<{ answer: string; sources?: any }> {
+    const res = await this.http.post<ApiResponse<{ answer: string; sources?: any }>>('/api/ai/chat', {
+      companyId,
+      question
+    });
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Error al consultar al copiloto IA');
+  }
+
   // === HEALTH ===
   async healthCheck(): Promise<boolean> {
     try {
