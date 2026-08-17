@@ -1,15 +1,18 @@
-// Customers Page
 import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
 import type { Customer } from '../types';
 import { Building2, Plus, Search } from 'lucide-react';
+import { AddCustomerForm } from '../components/Forms';
+import { useToast } from '../components/Toast';
 
 export default function CustomersPage() {
   const { companyId } = useAuth();
+  const { addToast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     api.getCustomers(companyId)
@@ -17,6 +20,11 @@ export default function CustomersPage() {
       .catch(() => setCustomers([]))
       .finally(() => setLoading(false));
   }, [companyId]);
+
+  const handleCustomerCreated = (newCustomer: Customer) => {
+    setCustomers(prev => [newCustomer, ...prev]);
+    addToast(`Cliente ${newCustomer.name} creado con éxito`, 'success');
+  };
 
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -31,11 +39,19 @@ export default function CustomersPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1><Building2 size={28} className="page-icon" /> Clientes</h1>
+          <h1><Building2 size={28} className="page-icon" /> Clientes / Dadores de Carga</h1>
           <p className="page-subtitle">{customers.length} clientes registrados</p>
         </div>
-        <button className="btn btn-primary"><Plus size={18} /> Nuevo Cliente</button>
+        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+          <Plus size={18} /> Nuevo Cliente
+        </button>
       </div>
+
+      <AddCustomerForm
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onCreated={handleCustomerCreated}
+      />
       <div className="table-controls">
         <div className="search-box">
           <Search size={18} />

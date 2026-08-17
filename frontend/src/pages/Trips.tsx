@@ -1,9 +1,10 @@
-// Trips Page - Trip lifecycle management
 import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
 import type { Trip } from '../types';
 import { Route, Plus, Search, Filter, MapPin, Clock, ArrowRight } from 'lucide-react';
+import { AddTripForm } from '../components/Forms';
+import { useToast } from '../components/Toast';
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pendiente', className: 'badge-purple' },
@@ -17,10 +18,12 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
 
 export default function TripsPage() {
   const { companyId } = useAuth();
+  const { addToast } = useToast();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     api.getTrips(companyId)
@@ -28,6 +31,11 @@ export default function TripsPage() {
       .catch(() => setTrips([]))
       .finally(() => setLoading(false));
   }, [companyId]);
+
+  const handleTripCreated = (newTrip: Trip) => {
+    setTrips(prev => [newTrip, ...prev]);
+    addToast(`Viaje a ${newTrip.destination} creado con éxito`, 'success');
+  };
 
   const filtered = trips.filter(t => {
     const matchSearch = t.origin.toLowerCase().includes(search.toLowerCase()) ||
@@ -48,10 +56,16 @@ export default function TripsPage() {
           <h1><Route size={28} className="page-icon" /> Gestión de Viajes</h1>
           <p className="page-subtitle">{trips.length} viajes registrados</p>
         </div>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
           <Plus size={18} /> Nuevo Viaje
         </button>
       </div>
+
+      <AddTripForm
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onCreated={handleTripCreated}
+      />
 
       <div className="table-controls">
         <div className="search-box">

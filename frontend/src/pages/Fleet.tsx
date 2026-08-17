@@ -1,9 +1,10 @@
-// Fleet Page - Vehicle management with data table
 import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
 import type { Vehicle } from '../types';
 import { Truck, Plus, Search, Filter } from 'lucide-react';
+import { AddVehicleForm } from '../components/Forms';
+import { useToast } from '../components/Toast';
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
   active: { label: 'Activo', className: 'badge-success' },
@@ -20,10 +21,12 @@ const TYPE_MAP: Record<string, string> = {
 
 export default function FleetPage() {
   const { companyId } = useAuth();
+  const { addToast } = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     api.getVehicles(companyId)
@@ -31,6 +34,11 @@ export default function FleetPage() {
       .catch(() => setVehicles([]))
       .finally(() => setLoading(false));
   }, [companyId]);
+
+  const handleVehicleCreated = (newVehicle: Vehicle) => {
+    setVehicles(prev => [newVehicle, ...prev]);
+    addToast(`Unidad ${newVehicle.licensePlate} agregada con éxito`, 'success');
+  };
 
   const filtered = vehicles.filter(v => {
     const matchSearch = v.licensePlate.toLowerCase().includes(search.toLowerCase()) ||
@@ -51,10 +59,16 @@ export default function FleetPage() {
           <h1><Truck size={28} className="page-icon" /> Gestión de Flota</h1>
           <p className="page-subtitle">{vehicles.length} unidades registradas</p>
         </div>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
           <Plus size={18} /> Nueva Unidad
         </button>
       </div>
+
+      <AddVehicleForm
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onCreated={handleVehicleCreated}
+      />
 
       <div className="table-controls">
         <div className="search-box">

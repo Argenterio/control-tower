@@ -1,9 +1,10 @@
-// Drivers Page - Driver management with data table
 import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
 import type { Driver } from '../types';
 import { Users, Plus, Search, AlertTriangle } from 'lucide-react';
+import { AddDriverForm } from '../components/Forms';
+import { useToast } from '../components/Toast';
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
   active: { label: 'Activo', className: 'badge-success' },
@@ -13,9 +14,11 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
 
 export default function DriversPage() {
   const { companyId } = useAuth();
+  const { addToast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     api.getDrivers(companyId)
@@ -23,6 +26,11 @@ export default function DriversPage() {
       .catch(() => setDrivers([]))
       .finally(() => setLoading(false));
   }, [companyId]);
+
+  const handleDriverCreated = (newDriver: Driver) => {
+    setDrivers(prev => [newDriver, ...prev]);
+    addToast(`Chofer ${newDriver.fullName} registrado con éxito`, 'success');
+  };
 
   const filtered = drivers.filter(d =>
     d.fullName.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,10 +60,16 @@ export default function DriversPage() {
           <h1><Users size={28} className="page-icon" /> Gestión de Choferes</h1>
           <p className="page-subtitle">{drivers.length} choferes registrados</p>
         </div>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
           <Plus size={18} /> Nuevo Chofer
         </button>
       </div>
+
+      <AddDriverForm
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onCreated={handleDriverCreated}
+      />
 
       <div className="table-controls">
         <div className="search-box">

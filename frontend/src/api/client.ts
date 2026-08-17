@@ -89,6 +89,12 @@ class ApiClient {
     throw new Error(res.data.error || 'Company not found');
   }
 
+  async createCompany(data: Partial<Company>): Promise<Company> {
+    const res = await this.http.post<ApiResponse<Company>>('/api/companies', data);
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Failed to create company');
+  }
+
   // === VEHICLES ===
   async getVehicles(companyId: string): Promise<Vehicle[]> {
     const res = await this.http.get<ApiResponse<Vehicle[]>>('/api/vehicles', {
