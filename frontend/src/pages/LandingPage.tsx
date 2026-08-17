@@ -290,13 +290,10 @@ export default function LandingPage() {
         {/* PRICING SECTION */}
         <section id="pricing" className="pricing-section">
           <div className="section-title-area">
-            <span className="section-tag">Planes a Medida</span>
-            <h2 className="section-title">Inversión transparente para tu rentabilidad</h2>
+            <span className="section-tag">Estructura de Servicio</span>
+            <h2 className="section-title">Planes adaptados al tamaño de tu flota propia</h2>
             <p className="section-subtitle" style={{ marginBottom: '16px' }}>
-              SaaS ágil y robusto para flotas propias en Argentina. Recuperás el costo de la suscripción mensual controlando solo 1 viaje perdido o detectando 1 desvío de combustible.
-            </p>
-            <p style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: 600 }}>
-              * Los abonos mensuales se calculan multiplicando el valor del camión por la cantidad total de unidades de tu flota propia.
+              Control Tower se adapta a la escala de tu operación logística. Evaluamos las necesidades de tu flota, nivel de integraciones y canales de soporte para diseñar una propuesta con retorno de inversión (ROI) garantizado en los primeros 30 días.
             </p>
           </div>
           <div className="pricing-grid">
@@ -305,21 +302,19 @@ export default function LandingPage() {
               <div className="pricing-card-header">
                 <h3 className="pricing-plan-name">Starter (10-25 camiones)</h3>
                 <div className="pricing-price">
-                  <span className="price-num">USD 35</span>
-                  <span className="price-unit">/ camión / mes</span>
+                  <span className="price-num" style={{ fontSize: '32px' }}>A Medida</span>
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--accent-amber)', marginTop: '8px', fontWeight: 600 }}>
-                  Alta (Setup): USD 600 (pago único)
+                <div style={{ fontSize: '13px', color: 'var(--text-dim)', marginTop: '8px', fontWeight: 600 }}>
+                  Abono mensual por unidad + Onboarding inicial
                 </div>
               </div>
               <p className="pricing-desc">
-                Ideal para digitalizarse rápido con lo esencial. <br />
-                <strong>Ejemplo:</strong> 10 camiones = USD 350/mes de abono recurrente.
+                Diseñado para empresas familiares y transportistas que buscan dar el salto a la digitalización operativa de forma rápida con las herramientas esenciales.
               </p>
               <ul className="pricing-features">
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Hasta 25 Unidades de Flota</span>
+                  <span>Hasta 25 Unidades de Flota Activas</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
@@ -327,11 +322,11 @@ export default function LandingPage() {
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Mapa de Tránsito en Vivo</span>
+                  <span>Mapa de Tránsito y Ubicaciones</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Control de Combustible</span>
+                  <span>Control de Tickets de Combustible</span>
                 </li>
                 <li className="pricing-feature-item pricing-feature-item-disabled">
                   <Check size={16} />
@@ -339,11 +334,11 @@ export default function LandingPage() {
                 </li>
                 <li className="pricing-feature-item pricing-feature-item-disabled">
                   <Check size={16} />
-                  <span>Integración GPS del Camión</span>
+                  <span>Integración de GPS de Terceros</span>
                 </li>
               </ul>
               <Link to="/login" className="pricing-btn pricing-btn-outline">
-                Solicitar Piloto
+                Solicitar Cotización Starter
               </Link>
             </div>
 
@@ -353,21 +348,19 @@ export default function LandingPage() {
               <div className="pricing-card-header">
                 <h3 className="pricing-plan-name">Pro (25-70 camiones)</h3>
                 <div className="pricing-price">
-                  <span className="price-num">USD 55</span>
-                  <span className="price-unit">/ camión / mes</span>
+                  <span className="price-num" style={{ fontSize: '32px' }}>A Medida</span>
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--primary)', marginTop: '8px', fontWeight: 700 }}>
-                  Alta (Setup): USD 1.200 (pago único, incluye capacitación)
+                  Abono optimizado por escala + Capacitación In-Situ
                 </div>
               </div>
               <p className="pricing-desc">
-                El plan más elegido. Control total con inteligencia operativa predictiva. <br />
-                <strong>Ejemplo:</strong> 30 camiones = USD 1.650/mes de abono recurrente.
+                Para empresas de logística medianas con flota propia que requieren trazabilidad activa, optimización de gasoil y copiloto de tráfico inteligente.
               </p>
               <ul className="pricing-features">
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Hasta 70 Unidades de Flota</span>
+                  <span>Hasta 70 Unidades de Flota Activas</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
@@ -375,23 +368,23 @@ export default function LandingPage() {
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Mapa Operativo Cruzado</span>
+                  <span>Mapa Operativo Cruzado con GPS</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Control Combustible Avanzado</span>
+                  <span>Control de Combustible con Desvíos</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span><strong>Copiloto IA de Tráfico</strong></span>
+                  <span><strong>Copiloto IA de Tráfico Avanzado</strong></span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Alertas Predictivas Legales</span>
+                  <span>Alertas Predictivas Legales (Seguros/LINTI)</span>
                 </li>
               </ul>
               <Link to="/login" className="pricing-btn pricing-btn-primary">
-                Comenzar Prueba
+                Solicitar Propuesta Pro
               </Link>
             </div>
 
@@ -400,14 +393,14 @@ export default function LandingPage() {
               <div className="pricing-card-header">
                 <h3 className="pricing-plan-name">Enterprise (+70 camiones)</h3>
                 <div className="pricing-price">
-                  <span className="price-num">A Medida</span>
+                  <span className="price-num" style={{ fontSize: '32px' }}>A Medida</span>
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--text-dim)', marginTop: '8px', fontWeight: 600 }}>
-                  Alta e Integración: Cotización a medida
+                  Integración dedicada + SLA Contractual
                 </div>
               </div>
               <p className="pricing-desc">
-                Para grandes empresas que exigen integraciones complejas con ERP y soporte premium 24h.
+                Para corporaciones logísticas con flotas de gran escala, requerimientos estrictos de seguridad de datos e integraciones complejas con ERP (SAP/Oracle).
               </p>
               <ul className="pricing-features">
                 <li className="pricing-feature-item">
@@ -416,27 +409,27 @@ export default function LandingPage() {
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Integración nativa ERP/SAP</span>
+                  <span>Integración nativa con su ERP actual</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Toda la IA + WhatsApp dedicados</span>
+                  <span>Toda la IA + Canales WhatsApp dedicados</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Gerente de Cuenta Onboarding</span>
+                  <span>Gerente de Cuenta & Onboarding dedicado</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>Desarrollos e Informes a Medida</span>
+                  <span>Desarrollos a medida e Informes complejos</span>
                 </li>
                 <li className="pricing-feature-item">
                   <Check size={16} />
-                  <span>SLA Contractual de 99.9%</span>
+                  <span>SLA Contractual de disponibilidad 99.9%</span>
                 </li>
               </ul>
               <Link to="/login" className="pricing-btn pricing-btn-outline">
-                Hablar con Ventas
+                Contactar a Ventas Enterprise
               </Link>
             </div>
           </div>
