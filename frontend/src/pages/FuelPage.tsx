@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Fuel, AlertTriangle, Plus, Search, Check, X, Calendar, DollarSign, Truck, UserCheck, MapPin } from 'lucide-react';
+import { Fuel, AlertTriangle, Plus, Search, Check, X, Calendar, Truck, UserCheck, MapPin } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
 import type { Vehicle, Driver } from '../types';
