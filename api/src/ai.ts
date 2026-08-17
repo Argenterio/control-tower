@@ -1,4 +1,4 @@
-// ai.ts - Integración con Google Gemini 2.0 Flash para Control Tower
+// ai.ts - Integración IA para Control Tower (Groq free / Google Gemini fallback)
 // Procesa lenguaje natural de choferes por WhatsApp y asistente operativo para la consola de tráfico
 
 import { dbService } from "./database";
@@ -6,6 +6,9 @@ import type { Driver, Trip, MessageInterpretation } from "./types";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_MODEL = process.env.GROQ_MODEL || "groq/compound";
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -22,6 +25,56 @@ interface GeminiResponse {
 }
 
 /**
+ * Llamada genérica a la API REST de Groq (OpenAI-compatible)
+ */
+async function callGroq(
+  prompt: string,
+  systemInstruction?: string,
+  temperature: number = 0.2
+): Promise<string> {
+  const url = "https://api.groq.com/openai/v1/chat/completions";
+
+  const messages: any[] = [];
+  if (systemInstruction) {
+    messages.push({ role: "system", content: systemInstruction });
+  }
+  messages.push({ role: "user", content: prompt });
+
+  const body = {
+    model: GROQ_MODEL,
+    messages,
+    temperature,
+    max_tokens: 1024
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn(`[Groq API Warning] Status ${response.status}:`, errText);
+      throw new Error(`Groq API error: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error("Groq returned empty response");
+    return text;
+  } catch (err: any) {
+    console.error("[Groq Error]:", err.message);
+    throw err;
+  }
+}
+
+/**
  * Llamada genérica a la API REST de Google Gemini
  */
 export async function callGemini(
@@ -29,6 +82,16 @@ export async function callGemini(
   systemInstruction?: string,
   temperature: number = 0.2
 ): Promise<string> {
+  // Si hay GROQ_API_KEY, usamos Groq como proveedor principal (plan free)
+  if (GROQ_API_KEY) {
+    try {
+      return await callGroq(prompt, systemInstruction, temperature);
+    } catch (err: any) {
+      console.warn("[Groq fallback to Gemini]:", err.message);
+      if (!GEMINI_API_KEY) throw err;
+    }
+  }
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
   const body: any = {
