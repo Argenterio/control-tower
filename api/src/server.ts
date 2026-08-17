@@ -456,6 +456,71 @@ app.get("/api/whatsapp/status", (req: express.Request, res: express.Response) =>
   });
 });
 
+// POST /api/whatsapp/send - Enviar mensaje manual a un chofer vía Evolution API
+app.post("/api/whatsapp/send", requireAuth, async (req: express.Request, res: express.Response) => {
+  try {
+    const { phone, message, instanceName, driverId, tripId } = req.body;
+    const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+
+    if (!phone || !message) {
+      return res.status(400).json({ success: false, error: "Los campos 'phone' y 'message' son requeridos" });
+    }
+
+    // Normalizar teléfono (solo números)
+    const cleanPhone = phone.replace(/[^0-9]/g, "");
+    const instance = instanceName || process.env.EVOLUTION_INSTANCE || "GenerAriseV2";
+    const evolutionBaseUrl = process.env.EVOLUTION_API_URL || "https://trafic.generarise.space";
+    const evolutionApiKey = process.env.EVOLUTION_API_KEY || "";
+
+    // 1. Enviar mensaje a Evolution API
+    const response = await fetch(`${evolutionBaseUrl}/message/sendText/${instance}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(evolutionApiKey ? { "apikey": evolutionApiKey } : {})
+      },
+      body: JSON.stringify({
+        number: cleanPhone,
+        textMessage: {
+          text: message
+        },
+        options: {
+          delay: 1000,
+          presence: "composing"
+        }
+      })
+    });
+
+    const responseData = await response.json().catch(() => ({ status: "sent" }));
+
+    // 2. Guardar mensaje saliente en la base de datos para auditoría
+    dbService.createWhatsappMessage({
+      companyId,
+      driverId,
+      phone: cleanPhone,
+      direction: "outgoing",
+      messageType: "text",
+      content: message,
+      tripId,
+      processed: true,
+      rawPayload: JSON.stringify(responseData),
+      responseMessage: message
+    });
+
+    res.json({
+      success: true,
+      message: "Mensaje enviado al WhatsApp del chofer",
+      data: responseData
+    });
+  } catch (error) {
+    console.error("Error al enviar WhatsApp manual:", error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Error al enviar mensaje vía Evolution API"
+    });
+  }
+});
+
 // POST /api/whatsapp/simulate - Endpoint para simular mensaje de chofer desde el Frontend
 app.post("/api/whatsapp/simulate", requireAuth, async (req: express.Request, res: express.Response) => {
   try {

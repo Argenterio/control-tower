@@ -160,6 +160,26 @@ class ApiClient {
     throw new Error(res.data.error || 'Failed to get dashboard summary');
   }
 
+  // === WHATSAPP ===
+  async sendWhatsappMessage(phone: string, message: string, driverId?: string, tripId?: string): Promise<{ success: boolean; message: string }> {
+    const res = await this.http.post<ApiResponse<any>>('/api/whatsapp/send', {
+      phone,
+      message,
+      driverId,
+      tripId
+    });
+    if (res.data.success) return { success: true, message: res.data.message || 'Mensaje enviado' };
+    throw new Error(res.data.error || 'Error al enviar mensaje');
+  }
+
+  async getWhatsappMessages(companyId: string): Promise<any[]> {
+    const res = await this.http.get<ApiResponse<any[]>>('/api/whatsapp/messages', {
+      params: { companyId }
+    });
+    if (res.data.success && res.data.data) return res.data.data;
+    return [];
+  }
+
   // === HEALTH ===
   async healthCheck(): Promise<boolean> {
     try {
