@@ -1048,6 +1048,96 @@ export class DatabaseService {
       "SELECT * FROM whatsapp_messages WHERE companyId = ? ORDER BY createdAt DESC LIMIT ?"
     ).all(companyId, limit) as WhatsappMessageRow[];
   }
+
+  // ===== Maintenance Methods =====
+  getMaintenance(companyId: string): (Maintenance & { vehiclePlate?: string; driverName?: string })[] {
+    return this.db.prepare(`
+      SELECT m.*, v.licensePlate as vehiclePlate, d.fullName as driverName
+      FROM maintenance m
+      LEFT JOIN vehicles v ON m.vehicleId = v.id
+      LEFT JOIN drivers d ON m.driverId = d.id
+      WHERE m.companyId = ?
+      ORDER BY m.serviceDate DESC, m.createdAt DESC
+    `).all(companyId) as (Maintenance & { vehiclePlate?: string; driverName?: string })[];
+  }
+
+  createMaintenance(data: Omit<Maintenance, "id" | "createdAt" | "updatedAt">): Maintenance {
+    const id = "M-" + crypto.randomUUID().slice(0, 6).toUpperCase();
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO maintenance (id, companyId, vehicleId, driverId, type, description, cost, serviceDate, nextServiceDate, kmAtService, workshop, status, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.companyId,
+      data.vehicleId || null,
+      data.driverId || null,
+      data.type || "preventive",
+      data.description || null,
+      data.cost || 0,
+      data.serviceDate || now.split("T")[0],
+      data.nextServiceDate || null,
+      data.kmAtService || 0,
+      data.workshop || null,
+      data.status || "scheduled",
+      now,
+      now
+    );
+    return this.db.prepare("SELECT * FROM maintenance WHERE id = ?").get(id) as Maintenance;
+  }
+
+  updateMaintenance(id: string, data: Partial<Maintenance>): Maintenance | null {
+    const now = new Date().toISOString();
+    const fields: string[] = [];
+    const values: any[] = [];
+    if (data.status !== undefined) { fields.push("status = ?"); values.push(data.status); }
+    if (data.cost !== undefined) { fields.push("cost = ?"); values.push(data.cost); }
+    if (data.description !== undefined) { fields.push("description = ?"); values.push(data.description); }
+    if (data.workshop !== undefined) { fields.push("workshop = ?"); values.push(data.workshop); }
+    if (data.nextServiceDate !== undefined) { fields.push("nextServiceDate = ?"); values.push(data.nextServiceDate); }
+    fields.push("updatedAt = ?");
+    values.push(now);
+    values.push(id);
+    if (fields.length === 0) return null;
+    this.db.prepare(`UPDATE maintenance SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+    return this.db.prepare("SELECT * FROM maintenance WHERE id = ?").get(id) as Maintenance;
+  }
+
+  // ===== Document Methods =====
+  getDocuments(companyId: string): (Document & { vehiclePlate?: string; driverName?: string })[] {
+    return this.db.prepare(`
+      SELECT doc.*, v.licensePlate as vehiclePlate, d.fullName as driverName
+      FROM documents doc
+      LEFT JOIN vehicles v ON doc.vehicleId = v.id
+      LEFT JOIN drivers d ON doc.driverId = d.id
+      WHERE doc.companyId = ?
+      ORDER BY doc.expiryDate ASC, doc.createdAt DESC
+    `).all(companyId) as (Document & { vehiclePlate?: string; driverName?: string })[];
+  }
+
+  createDocument(data: Omit<Document, "id" | "createdAt" | "updatedAt">): Document {
+    const id = "D-" + crypto.randomUUID().slice(0, 6).toUpperCase();
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO documents (id, companyId, vehicleId, driverId, type, title, fileUrl, expiryDate, status, uploadedAt, uploadedBy, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.companyId,
+      data.vehicleId || null,
+      data.driverId || null,
+      data.type,
+      data.title || null,
+      data.fileUrl || "https://storage.generarise.space/docs/" + id + ".pdf",
+      data.expiryDate || null,
+      data.status || "valid",
+      now,
+      data.uploadedBy || "Operaciones",
+      now,
+      now
+    );
+    return this.db.prepare("SELECT * FROM documents WHERE id = ?").get(id) as Document;
+  }
 }
 
 // Exportar instancia única con todos los métodos tipados

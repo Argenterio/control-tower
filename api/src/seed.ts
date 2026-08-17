@@ -145,6 +145,41 @@ export function seedDemoData() {
     `).run(t.id, companyId, t.vehicleId, t.driverId, t.customerId, t.origin, t.destination, t.status, t.fare, t.km, t.status === "completed" ? t.km : Math.round(t.km * 0.45));
   }
 
+  // 7. Mantenimiento y Servicios
+  const maintenanceOrders = [
+    { id: "M-01", vehicleId: "veh-01", type: "preventive", description: "Service 150.000 km (Aceite sintético, filtros motor y secador)", workshop: "Taller Central Campana", date: "2026-08-10", nextDate: "2026-11-10", km: 145000, cost: 890000, status: "completed" },
+    { id: "M-02", vehicleId: "veh-02", type: "corrective", description: "Cambio de pastillas y discos de freno eje delantero", workshop: "Frenos San Martín (Rosario)", date: "2026-08-14", nextDate: null, km: 219000, cost: 1250000, status: "completed" },
+    { id: "M-03", vehicleId: "veh-03", type: "corrective", description: "Reparación de fuelle neumático y sensor de ABS", workshop: "Iveco Oficial Córdoba", date: "2026-08-16", nextDate: null, km: 98500, cost: 620000, status: "in_progress" },
+    { id: "M-04", vehicleId: "veh-04", type: "preventive", description: "Rotación y alineación de 10 neumáticos", workshop: "Gomería Rutas Pampeanas", date: "2026-08-20", nextDate: "2026-12-20", km: 315000, cost: 340000, status: "scheduled" },
+    { id: "M-05", vehicleId: "veh-05", type: "preventive", description: "Control de baterías y sistema de inyección", workshop: "Taller Central Campana", date: "2026-08-22", nextDate: "2026-11-22", km: 178000, cost: 410000, status: "scheduled" },
+  ];
+
+  for (const m of maintenanceOrders) {
+    rawDb.prepare(`
+      INSERT OR REPLACE INTO maintenance (id, companyId, vehicleId, type, description, workshop, serviceDate, nextServiceDate, kmAtService, cost, status, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).run(m.id, companyId, m.vehicleId, m.type, m.description, m.workshop, m.date, m.nextDate, m.km, m.cost, m.status);
+  }
+
+  // 8. Control Documental Legal
+  const legalDocs = [
+    { id: "D-01", vehicleId: "veh-01", driverId: null, type: "RTO / VTV", title: "RTO-88934-BA", fileUrl: "https://storage.generarise.space/docs/rto-01.pdf", expiryDate: "2026-09-02", status: "expiring" },
+    { id: "D-02", vehicleId: "veh-02", driverId: null, type: "RUTA", title: "RUTA-299104", fileUrl: "https://storage.generarise.space/docs/ruta-02.pdf", expiryDate: "2027-02-15", status: "valid" },
+    { id: "D-03", vehicleId: "veh-03", driverId: null, type: "Póliza de Seguro", title: "POL-CHUBB-9921", fileUrl: "https://storage.generarise.space/docs/seg-03.pdf", expiryDate: "2026-08-12", status: "expired" },
+    { id: "D-04", vehicleId: null, driverId: "drv-01", type: "Licencia LNH", title: "LNH-29831920", fileUrl: "https://storage.generarise.space/docs/lnh-01.pdf", expiryDate: "2026-11-20", status: "valid" },
+    { id: "D-05", vehicleId: null, driverId: "drv-02", type: "Psicofísico", title: "PSICO-CNRT-884", fileUrl: "https://storage.generarise.space/docs/psico-02.pdf", expiryDate: "2026-08-28", status: "expiring" },
+    { id: "D-06", vehicleId: null, driverId: "drv-03", type: "Licencia LNH", title: "LNH-33102941", fileUrl: "https://storage.generarise.space/docs/lnh-03.pdf", expiryDate: "2027-05-10", status: "valid" },
+    { id: "D-07", vehicleId: null, driverId: null, type: "ART", title: "ART-ASOC-99281", fileUrl: "https://storage.generarise.space/docs/art-01.pdf", expiryDate: "2026-12-31", status: "valid" },
+    { id: "D-08", vehicleId: "veh-04", driverId: null, type: "Habilitación SENASA", title: "SENASA-CAT-301", fileUrl: "https://storage.generarise.space/docs/senasa-04.pdf", expiryDate: "2026-10-15", status: "valid" },
+  ];
+
+  for (const doc of legalDocs) {
+    rawDb.prepare(`
+      INSERT OR REPLACE INTO documents (id, companyId, vehicleId, driverId, type, title, fileUrl, expiryDate, status, uploadedAt, uploadedBy, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 'Sistema', datetime('now'), datetime('now'))
+    `).run(doc.id, companyId, doc.vehicleId, doc.driverId, doc.type, doc.title, doc.fileUrl, doc.expiryDate, doc.status);
+  }
+
   console.log("🏁 Carga de datos demo completada con éxito. Listo para demostración a transportistas.");
 }
 

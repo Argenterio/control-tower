@@ -180,6 +180,36 @@ class ApiClient {
     return [];
   }
 
+  // === MAINTENANCE ===
+  async getMaintenance(companyId: string): Promise<any[]> {
+    const res = await this.http.get<ApiResponse<any[]>>('/api/maintenance', {
+      params: { companyId }
+    });
+    if (res.data.success && res.data.data) return res.data.data;
+    return [];
+  }
+
+  async createMaintenance(data: any): Promise<any> {
+    const res = await this.http.post<ApiResponse<any>>('/api/maintenance', data);
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Error al registrar orden de mantenimiento');
+  }
+
+  // === DOCUMENTS ===
+  async getDocuments(companyId: string): Promise<any[]> {
+    const res = await this.http.get<ApiResponse<any[]>>('/api/documents', {
+      params: { companyId }
+    });
+    if (res.data.success && res.data.data) return res.data.data;
+    return [];
+  }
+
+  async createDocument(data: any): Promise<any> {
+    const res = await this.http.post<ApiResponse<any>>('/api/documents', data);
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Error al cargar documento');
+  }
+
   // === HEALTH ===
   async healthCheck(): Promise<boolean> {
     try {

@@ -333,6 +333,41 @@ app.post("/api/trips", requireAuth, (req: express.Request, res: express.Response
   res.status(201).json({ success: true, data: trip });
 });
 
+// === MAINTENANCE ROUTES ===
+app.get("/api/maintenance", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const records = dbService.getMaintenance(companyId);
+  res.json({ success: true, data: records });
+});
+
+app.post("/api/maintenance", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = req.body.companyId || (res.locals.auth?.companyId) || "default-company";
+  const record = dbService.createMaintenance({ ...req.body, companyId });
+  res.status(201).json({ success: true, data: record, message: "Orden de mantenimiento registrada" });
+});
+
+app.put("/api/maintenance/:id", requireAuth, (req: express.Request, res: express.Response) => {
+  const updated = dbService.updateMaintenance(req.params.id, req.body);
+  if (updated) {
+    res.json({ success: true, data: updated, message: "Orden actualizada" });
+  } else {
+    res.status(404).json({ success: false, error: "Orden no encontrada" });
+  }
+});
+
+// === DOCUMENTS ROUTES ===
+app.get("/api/documents", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const docs = dbService.getDocuments(companyId);
+  res.json({ success: true, data: docs });
+});
+
+app.post("/api/documents", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = req.body.companyId || (res.locals.auth?.companyId) || "default-company";
+  const doc = dbService.createDocument({ ...req.body, companyId });
+  res.status(201).json({ success: true, data: doc, message: "Documento cargado correctamente" });
+});
+
 // GPS Position route
 app.post("/api/gps-position", requireAuth, (req: express.Request, res: express.Response) => {
   const { tripId, latitude, longitude, speed } = req.body;
