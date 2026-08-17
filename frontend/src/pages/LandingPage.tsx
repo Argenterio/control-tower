@@ -292,8 +292,11 @@ export default function LandingPage() {
           <div className="section-title-area">
             <span className="section-tag">Planes a Medida</span>
             <h2 className="section-title">Inversión transparente para tu rentabilidad</h2>
-            <p className="section-subtitle">
+            <p className="section-subtitle" style={{ marginBottom: '16px' }}>
               SaaS ágil y robusto para flotas propias en Argentina. Recuperás el costo de la suscripción mensual controlando solo 1 viaje perdido o detectando 1 desvío de combustible.
+            </p>
+            <p style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: 600 }}>
+              * Los abonos mensuales se calculan multiplicando el valor del camión por la cantidad total de unidades de tu flota propia.
             </p>
           </div>
           <div className="pricing-grid">
@@ -303,10 +306,16 @@ export default function LandingPage() {
                 <h3 className="pricing-plan-name">Starter (10-25 camiones)</h3>
                 <div className="pricing-price">
                   <span className="price-num">USD 35</span>
-                  <span className="price-unit">/camión/mes</span>
+                  <span className="price-unit">/ camión / mes</span>
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--accent-amber)', marginTop: '8px', fontWeight: 600 }}>
+                  Alta (Setup): USD 600 (pago único)
                 </div>
               </div>
-              <p className="pricing-desc">Para empresas familiares y transportistas que buscan digitalizarse rápido con lo esencial.</p>
+              <p className="pricing-desc">
+                Ideal para digitalizarse rápido con lo esencial. <br />
+                <strong>Ejemplo:</strong> 10 camiones = USD 350/mes de abono recurrente.
+              </p>
               <ul className="pricing-features">
                 <li className="pricing-feature-item">
                   <Check size={16} />
@@ -345,10 +354,16 @@ export default function LandingPage() {
                 <h3 className="pricing-plan-name">Pro (25-70 camiones)</h3>
                 <div className="pricing-price">
                   <span className="price-num">USD 55</span>
-                  <span className="price-unit">/camión/mes</span>
+                  <span className="price-unit">/ camión / mes</span>
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--primary)', marginTop: '8px', fontWeight: 700 }}>
+                  Alta (Setup): USD 1.200 (pago único, incluye capacitación)
                 </div>
               </div>
-              <p className="pricing-desc">El plan más elegido por las logísticas medianas. Control total con inteligencia operativa predictiva.</p>
+              <p className="pricing-desc">
+                El plan más elegido. Control total con inteligencia operativa predictiva. <br />
+                <strong>Ejemplo:</strong> 30 camiones = USD 1.650/mes de abono recurrente.
+              </p>
               <ul className="pricing-features">
                 <li className="pricing-feature-item">
                   <Check size={16} />
@@ -385,10 +400,15 @@ export default function LandingPage() {
               <div className="pricing-card-header">
                 <h3 className="pricing-plan-name">Enterprise (+70 camiones)</h3>
                 <div className="pricing-price">
-                  <span className="price-num">Custom</span>
+                  <span className="price-num">A Medida</span>
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-dim)', marginTop: '8px', fontWeight: 600 }}>
+                  Alta e Integración: Cotización a medida
                 </div>
               </div>
-              <p className="pricing-desc">Para grandes empresas que exigen integraciones complejas con ERP y soporte premium 24h.</p>
+              <p className="pricing-desc">
+                Para grandes empresas que exigen integraciones complejas con ERP y soporte premium 24h.
+              </p>
               <ul className="pricing-features">
                 <li className="pricing-feature-item">
                   <Check size={16} />
