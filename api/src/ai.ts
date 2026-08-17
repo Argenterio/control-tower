@@ -5,7 +5,7 @@ import { dbService } from "./database";
 import type { Driver, Trip, MessageInterpretation } from "./types";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -61,8 +61,8 @@ export async function callGemini(
     if (!response.ok) {
       const errText = await response.text();
       console.warn(`[Gemini API Warning] Status ${response.status}:`, errText);
-      // Fallback a modelo gemini-1.5-flash si 2.0 no está disponible
-      if (GEMINI_MODEL !== "gemini-1.5-flash") {
+      // Fallback a otro modelo si el principal no está disponible
+      if (GEMINI_MODEL !== "gemini-3.6-flash") {
         return callGeminiFallback(prompt, systemInstruction, temperature);
       }
       throw new Error(`Gemini API error: ${response.statusText}`);
@@ -79,7 +79,7 @@ export async function callGemini(
 }
 
 async function callGeminiFallback(prompt: string, systemInstruction?: string, temperature: number = 0.2): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
   const body: any = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature, maxOutputTokens: 1024 }
