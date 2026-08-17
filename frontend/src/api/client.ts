@@ -8,7 +8,7 @@ import type {
   Customer, Trip, DashboardSummary
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.generarise.space';
+const API_BASE_URL = import.meta.env.PROD ? 'https://api.generarise.space' : (import.meta.env.VITE_API_URL || 'http://localhost:3000');
 
 class ApiClient {
   private http: AxiosInstance;
