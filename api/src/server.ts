@@ -37,31 +37,15 @@ import type {
 const app = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
-// Middlewares - configuration typed
-const allowedOrigins: string = process.env.FRONTEND_URL || [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "https://control-tower.generarise.space"
-].join(",");
-
 app.use(cors({
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Permitir requests sin origen (curl, healthchecks, webhooks)
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-    const origins = allowedOrigins.split(",").map((o) => o.trim());
-    if (origins.includes(origin) || origin.endsWith(".generarise.space")) {
-      callback(null, true);
-    } else {
-      callback(null, false);
-    }
-  },
-  credentials: true
+  origin: true,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 }));
-app.use(express.json({ limit: "10kb" }));
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
 // Health check - returns typed response
