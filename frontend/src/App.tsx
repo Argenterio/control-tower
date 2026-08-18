@@ -18,6 +18,7 @@ import { MaintenancePage } from './pages/MaintenancePage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { AlertsPage } from './pages/AlertsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import LeadsPage from './pages/LeadsPage';
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="fleet" element={<FleetPage />} />
             <Route path="drivers" element={<DriversPage />} />
             <Route path="customers" element={<CustomersPage />} />
+            <Route path="leads" element={<LeadsPage />} />
             <Route path="fuel" element={<FuelPage />} />
             <Route path="maintenance" element={<MaintenancePage />} />
             <Route path="documents" element={<DocumentsPage />} />

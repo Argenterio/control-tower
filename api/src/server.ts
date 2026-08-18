@@ -297,7 +297,15 @@ app.post("/api/drivers", requireAuth, (req: express.Request, res: express.Respon
   res.status(201).json({ success: true, data: driver });
 });
 
-// === CUSTOMERS ROUTES ===
+// === LEADS ROUTES (Landing Page Quotes) ===
+app.get("/api/leads", requireAuth, (req: express.Request, res: express.Response) => {
+  try {
+    const leads = dbService.getLeads();
+    res.json({ success: true, data: leads });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 app.get("/api/customers", requireAuth, (req: express.Request, res: express.Response) => {
   const companyId: string = req.query.companyId as string;
   const customers = dbService.getCustomers(companyId);

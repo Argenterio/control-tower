@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import {
   LayoutDashboard, Truck, Users, Route, Building2,
   Fuel, Wrench, FileText, AlertTriangle, Map,
-  Settings, LogOut, ChevronLeft, ChevronRight, Radio
+  Settings, LogOut, ChevronLeft, ChevronRight, Radio, UserCheck
 } from 'lucide-react';
 import { AiCopilot } from '../AiCopilot/AiCopilot';
 
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/fleet', label: 'Flota', icon: Truck },
   { to: '/drivers', label: 'Choferes', icon: Users },
   { to: '/customers', label: 'Clientes', icon: Building2 },
+  { to: '/leads', label: 'Prospectos (Leads)', icon: UserCheck },
   { to: '/fuel', label: 'Combustible', icon: Fuel },
   { to: '/maintenance', label: 'Mantenimiento', icon: Wrench },
   { to: '/documents', label: 'Documentos', icon: FileText },

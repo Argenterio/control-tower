@@ -240,6 +240,13 @@ class ApiClient {
     throw new Error(res.data.error || 'Error al consultar al copiloto IA');
   }
 
+  // === LEADS ===
+  async getLeads(): Promise<any[]> {
+    const res = await this.http.get<ApiResponse<any[]>>('/api/leads');
+    if (res.data.success && res.data.data) return res.data.data;
+    return [];
+  }
+
   // === HEALTH ===
   async healthCheck(): Promise<boolean> {
     try {

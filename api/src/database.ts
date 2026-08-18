@@ -869,6 +869,10 @@ export class DatabaseService {
     return this.db.prepare("SELECT * FROM leads WHERE id = ?").get(id);
   }
 
+  getLeads() {
+    return this.db.prepare("SELECT * FROM leads ORDER BY createdAt DESC").all();
+  }
+
   // Trip methods
   getTrips(companyId: string, filters: TripFilters = {}): Trip[] {
     let query = "SELECT * FROM trips WHERE companyId = ?";
