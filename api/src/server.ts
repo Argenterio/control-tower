@@ -53,6 +53,21 @@ app.get("/health", (req: express.Request, res: express.Response) => {
   res.json({ success: true, data: { status: "ok", timestamp: new Date().toISOString() } });
 });
 
+// POST /api/leads - Public lead capture endpoint from landing page
+app.post("/api/leads", (req: express.Request, res: express.Response) => {
+  const { name, companyName, fleetSize, phone, email, planRequested } = req.body || {};
+  if (!name || !companyName || !phone) {
+    res.status(400).json({ success: false, error: "Nombre, empresa y teléfono son requeridos." });
+    return;
+  }
+  try {
+    const lead = dbService.createLead({ name, companyName, fleetSize: fleetSize || "10-25", phone, email, planRequested });
+    res.json({ success: true, data: lead, message: "¡Cotización solicitada con éxito! Un especialista logístico se contactará con vos en menos de 2 horas." });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || "Error al registrar solicitud" });
+  }
+});
+
 // Root route - returns a professional landing page (HTTP 200 for EasyPanel health checks)
 app.get("/", (req: express.Request, res: express.Response) => {
   const html = `<!DOCTYPE html>

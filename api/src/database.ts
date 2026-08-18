@@ -136,6 +136,21 @@ db.exec(`
 db.exec(`CREATE INDEX IF NOT EXISTS idx_customers_companyId ON customers(companyId)`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_customers_taxId ON customers(taxId)`);
 
+// Leads comerciales de la Landing Page
+db.exec(`
+  CREATE TABLE IF NOT EXISTS leads (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    companyName TEXT NOT NULL,
+    fleetSize TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT,
+    planRequested TEXT,
+    status TEXT DEFAULT 'new',
+    createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
 // Viajes - corazón operativo
 db.exec(`
   CREATE TABLE IF NOT EXISTS trips (
@@ -841,6 +856,17 @@ export class DatabaseService {
     );
     stmt.run(id, customer.companyId, customer.name, customer.taxId, customer.address, customer.phone, customer.email, now, now);
     return this.getCustomer(id);
+  }
+
+  // Lead methods
+  createLead(data: { name: string; companyName: string; fleetSize: string; phone: string; email?: string; planRequested?: string }) {
+    const id = "lead-" + Math.random().toString(36).substring(2, 9);
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(
+      "INSERT INTO leads (id, name, companyName, fleetSize, phone, email, planRequested, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+    stmt.run(id, data.name, data.companyName, data.fleetSize, data.phone, data.email || "", data.planRequested || "general", now);
+    return this.db.prepare("SELECT * FROM leads WHERE id = ?").get(id);
   }
 
   // Trip methods
