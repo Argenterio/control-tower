@@ -1,7 +1,6 @@
 // LandingPage.tsx - Landing page profesional para Control Tower en Argentina
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import api from '../api/client';
+import { Link } from 'react-router-dom';
 import {
   Radio, ShieldCheck, Play, ArrowRight, AlertTriangle, Cpu,
   MessageSquare, MapPin, Fuel, FileText, Wrench, ShieldAlert,
@@ -9,7 +8,6 @@ import {
 } from 'lucide-react';
 
 export default function LandingPage() {
-  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('Starter (10-25 camiones)');
   const [name, setName] = useState('');
@@ -18,21 +16,8 @@ export default function LandingPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-
-  const handleInstantDemo = async () => {
-    setDemoLoading(true);
-    try {
-      await api.demoLogin();
-      navigate('/dashboard');
-    } catch {
-      navigate('/login');
-    } finally {
-      setDemoLoading(false);
-    }
-  };
 
   const openModal = (planName: string) => {
     setSelectedPlan(planName);
@@ -120,10 +105,10 @@ export default function LandingPage() {
               La primera plataforma operativa en Argentina para flotas de carga propias de más de 10 unidades. Nuestro motor procesa automáticamente partes de viaje, ubicaciones en tiempo real, gastos de gasoil y alertas legales interpretando los audios y textos de tus choferes. Sin planillas, sin carga manual.
             </p>
             <div className="hero-actions">
-              <button onClick={handleInstantDemo} disabled={demoLoading} className="btn-cta btn-cta-primary" style={{ cursor: 'pointer' }}>
-                {demoLoading ? <Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={16} />}
-                Ver Demo Interactiva en Vivo
-              </button>
+              <Link to="/login" className="btn-cta btn-cta-primary">
+                Ingresar al Sistema / Login
+                <Play size={16} />
+              </Link>
               <button onClick={() => openModal('Cotización Comercial')} className="btn-cta btn-cta-secondary" style={{ cursor: 'pointer' }}>
                 Solicitar Cotización
               </button>
@@ -506,13 +491,13 @@ export default function LandingPage() {
         <section className="cta-section">
           <div className="cta-box">
             <div className="cta-box-orb" />
-            <h2 className="cta-title">¿Listo para recuperar el control de tu logística?</h2>
+            <h2 className="cta-title">¿Listo para transformar la gestión de tu flota propia?</h2>
             <p className="cta-desc">
-              Conectá tu flota hoy y obtené 30 días de prueba bonificados con tu propia base de camiones y choferes. Descubrí el valor de la Inteligencia Artificial operativa.
+              Implementá Control Tower en tu empresa de transporte y optimizá el control operativo, combustible, tráfico y documentación legal con Inteligencia Artificial.
             </p>
             <div className="hero-actions" style={{ justifyContent: 'center' }}>
-              <button onClick={() => openModal('Demostración General')} className="btn-cta btn-cta-primary" style={{ cursor: 'pointer' }}>
-                Solicitar Demostración en Vivo
+              <button onClick={() => openModal('Demostración Corporativa')} className="btn-cta btn-cta-primary" style={{ cursor: 'pointer' }}>
+                Solicitar Demostración Corporativa
                 <ArrowRight size={16} />
               </button>
             </div>
