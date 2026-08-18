@@ -76,6 +76,21 @@ class ApiClient {
     }
   }
 
+  async demoLogin(): Promise<AuthResponse> {
+    try {
+      const res = await this.http.post<ApiResponse<AuthResponse>>('/api/auth/demo-login');
+      if (res.data.success && res.data.data) {
+        this.setToken(res.data.data.token);
+        localStorage.setItem('ct_user', JSON.stringify(res.data.data.user));
+        return res.data.data;
+      }
+      throw new Error(res.data.error || 'Error al iniciar demo');
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.message;
+      throw new Error(msg);
+    }
+  }
+
   async getMe(): Promise<User> {
     const res = await this.http.get<ApiResponse<User>>('/api/auth/me');
     if (res.data.success && res.data.data) return res.data.data;

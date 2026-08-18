@@ -1,6 +1,7 @@
 // LandingPage.tsx - Landing page profesional para Control Tower en Argentina
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import api from '../api/client';
 import {
   Radio, ShieldCheck, Play, ArrowRight, AlertTriangle, Cpu,
   MessageSquare, MapPin, Fuel, FileText, Wrench, ShieldAlert,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 export default function LandingPage() {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('Starter (10-25 camiones)');
   const [name, setName] = useState('');
@@ -16,13 +18,20 @@ export default function LandingPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleScrollToPricing = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const el = document.getElementById('pricing');
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  const handleInstantDemo = async () => {
+    setDemoLoading(true);
+    try {
+      await api.demoLogin();
+      navigate('/dashboard');
+    } catch {
+      navigate('/login');
+    } finally {
+      setDemoLoading(false);
+    }
   };
 
   const openModal = (planName: string) => {
@@ -111,13 +120,13 @@ export default function LandingPage() {
               La primera plataforma operativa en Argentina para flotas de carga propias de más de 10 unidades. Nuestro motor procesa automáticamente partes de viaje, ubicaciones en tiempo real, gastos de gasoil y alertas legales interpretando los audios y textos de tus choferes. Sin planillas, sin carga manual.
             </p>
             <div className="hero-actions">
-              <button onClick={() => openModal('Demo / Piloto Gratuito')} className="btn-cta btn-cta-primary" style={{ cursor: 'pointer' }}>
-                Solicitar Demostración
-                <Play size={16} />
+              <button onClick={handleInstantDemo} disabled={demoLoading} className="btn-cta btn-cta-primary" style={{ cursor: 'pointer' }}>
+                {demoLoading ? <Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={16} />}
+                Ver Demo Interactiva en Vivo
               </button>
-              <a href="#pricing" onClick={handleScrollToPricing} className="btn-cta btn-cta-secondary">
-                Ver Planes
-              </a>
+              <button onClick={() => openModal('Cotización Comercial')} className="btn-cta btn-cta-secondary" style={{ cursor: 'pointer' }}>
+                Solicitar Cotización
+              </button>
             </div>
             <div className="hero-trust">
               <p className="hero-trust-text">Compatible con los sistemas que ya usás</p>

@@ -180,6 +180,29 @@ app.post("/api/auth/login", (req: express.Request, res: express.Response) => {
   } as ApiResponse<{ token: string; user: Partial<User> }>);
 });
 
+// POST /api/auth/demo-login - acceso libre a una demo interactiva pre-cargada para prospectos
+app.post("/api/auth/demo-login", (req: express.Request, res: express.Response) => {
+  const adminUser = dbService.getUserByEmail("admin@controltower.com");
+  if (!adminUser) {
+    res.status(404).json({ success: false, error: "Demo user not found" });
+    return;
+  }
+  const token = signToken({ id: adminUser.id, email: adminUser.email, role: adminUser.role, companyId: adminUser.companyId });
+  res.json({
+    success: true,
+    data: {
+      token,
+      user: {
+        id: adminUser.id,
+        name: adminUser.name,
+        email: adminUser.email,
+        role: adminUser.role,
+        companyId: adminUser.companyId
+      }
+    }
+  });
+});
+
 // GET /api/auth/me - devuelve el usuario del token actual
 app.get("/api/auth/me", requireAuth, (req: express.Request, res: express.Response) => {
   const auth = res.locals.auth as AuthPayload;
