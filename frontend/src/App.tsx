@@ -19,44 +19,48 @@ import { DocumentsPage } from './pages/DocumentsPage';
 import { AlertsPage } from './pages/AlertsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import LeadsPage from './pages/LeadsPage';
+import DriverMessagesPage from './pages/DriverMessages';
+import EvidencePage from './pages/Evidence';
 
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
         <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected Routes inside Sidebar Layout */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <Sidebar />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="map" element={<MapPage />} />
-            <Route path="trips" element={<TripsPage />} />
-            <Route path="fleet" element={<FleetPage />} />
-            <Route path="drivers" element={<DriversPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="leads" element={<LeadsPage />} />
-            <Route path="fuel" element={<FuelPage />} />
-            <Route path="maintenance" element={<MaintenancePage />} />
-            <Route path="documents" element={<DocumentsPage />} />
-            <Route path="alerts" element={<AlertsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
+            {/* Protected Routes inside Sidebar Layout */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <Sidebar />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="map" element={<MapPage />} />
+              <Route path="trips" element={<TripsPage />} />
+              <Route path="fleet" element={<FleetPage />} />
+              <Route path="drivers" element={<DriversPage />} />
+              <Route path="customers" element={<CustomersPage />} />
+              <Route path="leads" element={<LeadsPage />} />
+              <Route path="fuel" element={<FuelPage />} />
+              <Route path="maintenance" element={<MaintenancePage />} />
+              <Route path="documents" element={<DocumentsPage />} />
+              <Route path="alerts" element={<AlertsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="inbox" element={<DriverMessagesPage />} />
+              <Route path="evidence" element={<EvidencePage />} />
+            </Route>
 
-          {/* Catch all */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </ToastProvider>
-  </AuthProvider>
+            {/* Catch all */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
+    </AuthProvider>
   );
 }

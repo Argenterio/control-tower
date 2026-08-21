@@ -10,7 +10,7 @@ import type { DatabaseService } from "./database";
 import { signToken, requireAuth, requireRole, ensureAdminUser, verifyPassword, type AuthPayload } from "./auth";
 import { seedDemoData } from "./seed";
 import { processIncomingWhatsappMessage } from "./whatsapp";
-import { askFleetAssistant } from "./ai";
+import { askFleetAssistant, summarizeOperation } from "./ai";
 import type {
   Company,
   User,
@@ -643,6 +643,136 @@ app.post("/api/whatsapp/simulate", requireAuth, async (req: express.Request, res
       error: error instanceof Error ? error.message : "Error al simular mensaje"
     });
   }
+});
+
+
+// =====================================================
+// CONTROL TOWER 360 — ENDPOINTS NUEVOS (FASE 1)
+// =====================================================
+
+// GET /api/operation/summary - Resumen IA de la torre (totales + requiere atención + narrativa)
+app.get("/api/operation/summary", requireAuth, async (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  try {
+    const summary = await summarizeOperation(companyId);
+    res.json({ success: true, data: summary });
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// GET /api/operational-alerts - Bandeja de alertas priorizadas
+app.get("/api/operational-alerts", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const level = req.query.level as string | undefined;
+  const status = (req.query.status as string) || "open";
+  const tripId = req.query.tripId as string | undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+
+  const alerts = dbService.getOperationalAlerts(companyId, { level, status, tripId, limit });
+
+  // Enriquecer con nombre de chofer y patente
+  const enriched = alerts.map(a => {
+    const driver = a.driverId ? dbService.getDriver(a.driverId) : null;
+    const trip = a.tripId ? dbService.getTrip(a.tripId) : null;
+    return {
+      ...a,
+      driverName: driver?.fullName,
+      driverPhone: driver?.phone,
+      tripOrigin: trip?.origin,
+      tripDestination: trip?.destination
+    };
+  });
+
+  res.json({ success: true, data: enriched });
+});
+
+// PATCH /api/operational-alerts/:id - Actualizar estado de alerta
+app.patch("/api/operational-alerts/:id", requireAuth, (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  const { status } = req.body as { status?: "open" | "acknowledged" | "resolved" | "dismissed" };
+  const auth = res.locals.auth as AuthPayload;
+  if (!status) {
+    res.status(400).json({ success: false, error: "status requerido" });
+    return;
+  }
+  const updated = dbService.updateOperationalAlertStatus(id, status, auth?.sub);
+  if (!updated) {
+    res.status(404).json({ success: false, error: "Alerta no encontrada" });
+    return;
+  }
+  res.json({ success: true, data: updated });
+});
+
+// GET /api/operational-events - Eventos operacionales crudos
+app.get("/api/operational-events", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const tripId = req.query.tripId as string | undefined;
+  const priority = req.query.priority as string | undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
+  const events = dbService.getOperationalEvents(companyId, { tripId, priority, limit });
+  res.json({ success: true, data: events });
+});
+
+// GET /api/trip-evidence - Evidencias del viaje (audios, fotos, docs, ubicaciones)
+app.get("/api/trip-evidence", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const tripId = req.query.tripId as string | undefined;
+  const kind = req.query.kind as string | undefined;
+  const driverId = req.query.driverId as string | undefined;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
+  const evidence = dbService.getTripEvidence(companyId, { tripId, kind, driverId, limit });
+  res.json({ success: true, data: evidence });
+});
+
+// GET /api/trips/:id/timeline - Línea de tiempo completa del viaje
+app.get("/api/trips/:id/timeline", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const data = dbService.getTripTimeline(companyId, req.params.id);
+  res.json({ success: true, data });
+});
+
+// GET /api/operation/inbox - Bandeja de Mensajes de Choferes (join whatsapp_messages + driver + trip)
+app.get("/api/operation/inbox", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
+
+  const messages = dbService.getWhatsappMessages(companyId, limit);
+  const enriched = messages.map(m => {
+    const driver = m.driverId ? dbService.getDriver(m.driverId) : null;
+    const trip = m.tripId ? dbService.getTrip(m.tripId) : null;
+    const vehicle = driver?.vehicleId ? dbService.getVehicle(driver.vehicleId) : null;
+    let parsedMetadata: Record<string, unknown> | null = null;
+    if (m.rawPayload) {
+      try { parsedMetadata = JSON.parse(m.rawPayload); } catch { /* ignore */ }
+    }
+    return {
+      id: m.id,
+      createdAt: m.createdAt,
+      phone: m.phone,
+      direction: m.direction,
+      messageType: m.messageType,
+      content: m.content,
+      mediaUrl: m.mediaUrl,
+      interpretedAction: m.interpretedAction,
+      interpretedConfidence: m.interpretedConfidence,
+      processed: !!m.processed,
+      responseMessage: m.responseMessage,
+      driver: driver ? { id: driver.id, fullName: driver.fullName, phone: driver.phone, dni: driver.dni } : null,
+      vehicle: vehicle ? { id: vehicle.id, licensePlate: vehicle.licensePlate } : null,
+      trip: trip ? {
+        id: trip.id,
+        origin: trip.origin,
+        destination: trip.destination,
+        status: trip.status,
+        estimatedArrival: trip.estimatedArrival
+      } : null,
+      pushName: (parsedMetadata?.pushName as string | undefined) || undefined,
+      messageId: (parsedMetadata?.messageId as string | undefined) || undefined
+    };
+  });
+
+  res.json({ success: true, data: enriched });
 });
 
 

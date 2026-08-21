@@ -1,27 +1,56 @@
-// Sidebar Layout - Professional dark theme sidebar navigation
+// Sidebar Layout - Bandeja Operativa de Control Tower 360
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {
   LayoutDashboard, Truck, Users, Route, Building2,
-  Fuel, Wrench, FileText, AlertTriangle, Map,
-  Settings, LogOut, ChevronLeft, ChevronRight, Radio, UserCheck
+  Fuel, Wrench, FileText, Map,
+  Settings, LogOut, ChevronLeft, ChevronRight, Radio, UserCheck,
+  MessageSquare, ShieldAlert, Image
 } from 'lucide-react';
 import { AiCopilot } from '../AiCopilot/AiCopilot';
 
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/map', label: 'Mapa Operativo', icon: Map },
-  { to: '/trips', label: 'Viajes', icon: Route },
-  { to: '/fleet', label: 'Flota', icon: Truck },
-  { to: '/drivers', label: 'Choferes', icon: Users },
-  { to: '/customers', label: 'Clientes', icon: Building2 },
-  { to: '/leads', label: 'Prospectos (Leads)', icon: UserCheck },
-  { to: '/fuel', label: 'Combustible', icon: Fuel },
-  { to: '/maintenance', label: 'Mantenimiento', icon: Wrench },
-  { to: '/documents', label: 'Documentos', icon: FileText },
-  { to: '/alerts', label: 'Alertas', icon: AlertTriangle },
-  { to: '/settings', label: 'Configuración', icon: Settings },
+type NavGroup = {
+  title?: string;
+  items: { to: string; label: string; icon: any; highlight?: boolean }[];
+};
+
+// Control Tower 360 — Bandeja Operativa
+const navGroups: NavGroup[] = [
+  {
+    title: 'Operación',
+    items: [
+      { to: '/dashboard', label: 'Torre 360', icon: LayoutDashboard, highlight: true },
+      { to: '/inbox', label: 'Mensajes de Choferes', icon: MessageSquare, highlight: true },
+      { to: '/alerts', label: 'Alertas', icon: ShieldAlert, highlight: true },
+      { to: '/trips', label: 'Viajes', icon: Route },
+      { to: '/evidence', label: 'Evidencias', icon: Image, highlight: true },
+    ]
+  },
+  {
+    title: 'Activos',
+    items: [
+      { to: '/map', label: 'Mapa Operativo', icon: Map },
+      { to: '/fleet', label: 'Flota', icon: Truck },
+      { to: '/drivers', label: 'Choferes', icon: Users },
+      { to: '/customers', label: 'Clientes', icon: Building2 },
+    ]
+  },
+  {
+    title: 'Gestión',
+    items: [
+      { to: '/fuel', label: 'Combustible', icon: Fuel },
+      { to: '/maintenance', label: 'Mantenimiento', icon: Wrench },
+      { to: '/documents', label: 'Documentos', icon: FileText },
+      { to: '/leads', label: 'Prospectos', icon: UserCheck },
+    ]
+  },
+  {
+    title: 'Sistema',
+    items: [
+      { to: '/settings', label: 'Configuración', icon: Settings },
+    ]
+  }
 ];
 
 export default function Sidebar() {
@@ -42,8 +71,8 @@ export default function Sidebar() {
             <Radio className="brand-icon" size={28} />
             {!collapsed && (
               <div className="brand-text">
-                <span className="brand-name">Control Tower</span>
-                <span className="brand-sub">Plataforma SaaS</span>
+                <span className="brand-name">Control Tower 360</span>
+                <span className="brand-sub">Centro de Control Operativo</span>
               </div>
             )}
           </div>
@@ -57,18 +86,25 @@ export default function Sidebar() {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `nav-item ${isActive ? 'active' : ''}`
-              }
-              title={collapsed ? item.label : undefined}
-            >
-              <item.icon size={20} className="nav-icon" />
-              {!collapsed && <span className="nav-label">{item.label}</span>}
-            </NavLink>
+          {navGroups.map((group, gi) => (
+            <div key={gi} className="nav-group">
+              {!collapsed && group.title && (
+                <div className="nav-group-title">{group.title}</div>
+              )}
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `nav-item ${isActive ? 'active' : ''} ${item.highlight ? 'nav-highlight' : ''}`
+                  }
+                  title={collapsed ? item.label : undefined}
+                >
+                  <item.icon size={20} className="nav-icon" />
+                  {!collapsed && <span className="nav-label">{item.label}</span>}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 

@@ -164,3 +164,106 @@ export interface AuthResponse {
   token: string;
   user: User;
 }
+
+// ===== Control Tower 360 — Tipos extendidos =====
+
+export type OperationalPriority = "critica" | "alta" | "atencion" | "informativa";
+
+export interface OperationalEvent {
+  id: string;
+  companyId: string;
+  tripId?: string;
+  driverId?: string;
+  vehicleId?: string;
+  source: "whatsapp" | "manual" | "gps" | "system";
+  sourceMessageId?: string;
+  type: string;
+  category?: string;
+  priority: OperationalPriority;
+  title?: string;
+  description?: string;
+  metadata?: string;
+  requiresIntervention: boolean;
+  createdAt: string;
+}
+
+export interface OperationalAlert {
+  id: string;
+  companyId: string;
+  eventId?: string;
+  tripId?: string;
+  driverId?: string;
+  vehicleId?: string;
+  level: OperationalPriority;
+  title: string;
+  message?: string;
+  entityType?: "trip" | "driver" | "vehicle" | "customer";
+  entityLabel?: string;
+  requiresIntervention: boolean;
+  status: "open" | "acknowledged" | "resolved" | "dismissed";
+  acknowledgedBy?: string;
+  acknowledgedAt?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  driverName?: string;
+  driverPhone?: string;
+  tripOrigin?: string;
+  tripDestination?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripEvidence {
+  id: string;
+  companyId: string;
+  tripId?: string;
+  driverId?: string;
+  kind: "audio" | "image" | "document" | "location" | "text";
+  title?: string;
+  description?: string;
+  mediaUrl?: string;
+  transcript?: string;
+  metadata?: string;
+  source: string;
+  sourceMessageId?: string;
+  capturedAt?: string;
+  createdAt: string;
+}
+
+export interface InboxMessage {
+  id: string;
+  createdAt: string;
+  phone: string;
+  direction: "incoming" | "outgoing";
+  messageType: string;
+  content?: string;
+  mediaUrl?: string;
+  interpretedAction?: string;
+  interpretedConfidence?: number;
+  processed: boolean;
+  responseMessage?: string;
+  driver: { id: string; fullName: string; phone?: string; dni?: string } | null;
+  vehicle: { id: string; licensePlate: string } | null;
+  trip: { id: string; origin: string; destination: string; status: string; estimatedArrival?: string } | null;
+  pushName?: string;
+}
+
+export type TimelineItem =
+  | { kind: "event"; at: string; event: OperationalEvent }
+  | { kind: "message"; at: string; message: { id: string; phone: string; messageType: string; content?: string; interpretedAction?: string; createdAt: string; responseMessage?: string } }
+  | { kind: "evidence"; at: string; evidence: TripEvidence }
+  | { kind: "location"; at: string; location: { id: string; latitude: number; longitude: number; speed: number; capturedAt: string; label?: string } };
+
+export interface OperationSummary {
+  totals: {
+    activeTrips: number;
+    normalTrips: number;
+    delayedTrips: number;
+    incidentTrips: number;
+    criticalOpen: number;
+    messagesToday: number;
+    driversActiveToday: number;
+  };
+  requiresAttention: Array<OperationalAlert & { driverName?: string; vehiclePlate?: string }>;
+  narrative: string;
+}

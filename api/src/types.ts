@@ -287,6 +287,7 @@ export type InterpretedAction =
   | "location_share"    // Ubicación compartida
   | "greeting"          // "Hola", "Buenos días"
   | "status_query"      // "¿Cómo va mi viaje?", "¿Qué viaje tengo?"
+  | "general_message"   // Mensaje general sin acción específica
   | "unknown";          // No se pudo interpretar
 
 // Mensaje de WhatsApp almacenado

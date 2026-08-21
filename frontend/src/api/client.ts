@@ -5,7 +5,8 @@ import axios from 'axios';
 import type { AxiosInstance, AxiosError } from 'axios';
 import type {
   ApiResponse, AuthResponse, Company, User, Vehicle, Driver,
-  Customer, Trip, DashboardSummary
+  Customer, Trip, DashboardSummary,
+  OperationalEvent, OperationalAlert, TripEvidence, InboxMessage, OperationSummary
 } from '../types';
 
 const API_BASE_URL = import.meta.env.PROD ? 'https://api.generarise.space' : (import.meta.env.VITE_API_URL || 'http://localhost:3000');
@@ -270,6 +271,48 @@ class ApiClient {
     } catch {
       return false;
     }
+  }
+
+  // === CONTROL TOWER 360 ===
+
+  async getOperationSummary(companyId: string): Promise<OperationSummary> {
+    const res = await this.http.get<ApiResponse<OperationSummary>>('/api/operation/summary', { params: { companyId } });
+    return res.data.data || { totals: { activeTrips: 0, normalTrips: 0, delayedTrips: 0, incidentTrips: 0, criticalOpen: 0, messagesToday: 0, driversActiveToday: 0 }, requiresAttention: [], narrative: '' };
+  }
+
+  async getOperationalAlerts(companyId: string, opts: { level?: string; status?: string; tripId?: string; limit?: number } = {}): Promise<OperationalAlert[]> {
+    const res = await this.http.get<ApiResponse<OperationalAlert[]>>('/api/operational-alerts', { params: { companyId, ...opts } });
+    return res.data.data || [];
+  }
+
+  async updateOperationalAlert(id: string, status: "open" | "acknowledged" | "resolved" | "dismissed"): Promise<OperationalAlert | null> {
+    const res = await this.http.patch<ApiResponse<OperationalAlert>>(`/api/operational-alerts/${id}`, { status });
+    return res.data.data || null;
+  }
+
+  async getOperationalEvents(companyId: string, opts: { tripId?: string; priority?: string; limit?: number } = {}): Promise<OperationalEvent[]> {
+    const res = await this.http.get<ApiResponse<OperationalEvent[]>>('/api/operational-events', { params: { companyId, ...opts } });
+    return res.data.data || [];
+  }
+
+  async getTripEvidence(companyId: string, opts: { tripId?: string; kind?: string; driverId?: string; limit?: number } = {}): Promise<TripEvidence[]> {
+    const res = await this.http.get<ApiResponse<TripEvidence[]>>('/api/trip-evidence', { params: { companyId, ...opts } });
+    return res.data.data || [];
+  }
+
+  async getTripTimeline(companyId: string, tripId: string): Promise<{ trip: any; timeline: any[] }> {
+    const res = await this.http.get<ApiResponse<{ trip: any; timeline: any[] }>>(`/api/trips/${tripId}/timeline`, { params: { companyId } });
+    return res.data.data || { trip: null, timeline: [] };
+  }
+
+  async getInbox(companyId: string, limit = 100): Promise<InboxMessage[]> {
+    const res = await this.http.get<ApiResponse<InboxMessage[]>>('/api/operation/inbox', { params: { companyId, limit } });
+    return res.data.data || [];
+  }
+
+  async simulateWhatsappMessage(companyId: string, data: { phone?: string; message?: string; messageType?: string; latitude?: number; longitude?: number }): Promise<any> {
+    const res = await this.http.post<ApiResponse<any>>('/api/whatsapp/simulate', { companyId, ...data });
+    return res.data;
   }
 }
 

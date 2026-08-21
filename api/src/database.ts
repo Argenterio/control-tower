@@ -224,9 +224,9 @@ db.exec(`
     FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE SET NULL
   )
 `);
-db.exec(`CREATE INDEX IF NOT EXISTS idx_fuel_entries_companyId ON fuel_entries(companyId)`);
-db.exec(`CREATE INDEX IF NOT EXISTS idx_fuel_entries_vehicleId ON fuel_entries(vehicleId)`);
-db.exec(`CREATE INDEX IF NOT EXISTS idx_fuel_entries_driverId ON fuel_entries(driverId)`);
+safeCreateIndex("idx_fuel_entries_companyId", "fuel_entries", "companyId");
+safeCreateIndex("idx_fuel_entries_vehicleId", "fuel_entries", "vehicleId");
+safeCreateIndex("idx_fuel_entries_driverId", "fuel_entries", "driverId");
 db.exec(`CREATE INDEX IF NOT EXISTS idx_fuel_entries_tripId ON fuel_entries(tripId)`);
 
 // Mantenimiento
@@ -418,6 +418,191 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_companyId ON whatsapp_
 db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_phone ON whatsapp_messages(phone)`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_driverId ON whatsapp_messages(driverId)`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_tripId ON whatsapp_messages(tripId)`);
+
+// ===== CONTROL TOWER 360 — TABLAS NUEVAS (FASE 1) =====
+// Estas tablas no destruyen nada existente: extienden el modelo con:
+// - operational_events: hechos crudos interpretados por la IA a partir de mensajes del chofer
+// - trip_evidence: archivos asociados al viaje (audios, fotos, docs, ubicaciones, mensajes)
+// - operational_alerts: alertas priorizadas para la Bandeja Operativa (4 niveles)
+// - driver_locations: puntos GPS recibidos por WhatsApp / n8n
+// - ai_interactions: registro de qué interpretó la IA (auditoría y debugging)
+
+// Eventos operacionales interpretados por la IA (uno por cada mensaje que produce efecto)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS operational_events (
+    id TEXT PRIMARY KEY,
+    companyId TEXT NOT NULL,
+    tripId TEXT,
+    driverId TEXT,
+    vehicleId TEXT,
+    source TEXT DEFAULT 'whatsapp',                 -- whatsapp | manual | gps | system
+    sourceMessageId TEXT,                            -- whatsapp_messages.id si aplica
+    type TEXT NOT NULL,                              -- departure | arrival | loading | unloading | delay | breakdown | accident | tire | fuel | document | location | eta_update | custom
+    category TEXT,                                   -- vehicle | trip | driver | cargo | customer
+    priority TEXT DEFAULT 'media',                   -- critica | alta | atencion | informativa
+    title TEXT,
+    description TEXT,
+    metadata TEXT,                                   -- JSON: {demora_minutos, nuevo_eta, ubicacion, ...}
+    requiresIntervention INTEGER DEFAULT 0,          -- 0/1 (SQLite)
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE SET NULL,
+    FOREIGN KEY (driverId) REFERENCES drivers(id) ON DELETE SET NULL,
+    FOREIGN KEY (vehicleId) REFERENCES vehicles(id) ON DELETE SET NULL
+  )
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_events_companyId ON operational_events(companyId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_events_tripId ON operational_events(tripId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_events_priority ON operational_events(priority)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_events_createdAt ON operational_events(createdAt)`);
+
+// Evidencias asociadas al viaje (audios, fotos, documentos, ubicaciones, mensajes destacados)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS trip_evidence (
+    id TEXT PRIMARY KEY,
+    companyId TEXT NOT NULL,
+    tripId TEXT,
+    driverId TEXT,
+    kind TEXT NOT NULL,                              -- audio | image | document | location | text
+    title TEXT,
+    description TEXT,
+    mediaUrl TEXT,
+    transcript TEXT,                                 -- para audios/imágenes
+    metadata TEXT,                                   -- JSON libre
+    source TEXT DEFAULT 'whatsapp',                  -- whatsapp | manual | upload
+    sourceMessageId TEXT,
+    capturedAt TEXT,                                 -- cuándo ocurrió (timestamp del mensaje)
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE SET NULL,
+    FOREIGN KEY (driverId) REFERENCES drivers(id) ON DELETE SET NULL
+  )
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_trip_evidence_companyId ON trip_evidence(companyId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_trip_evidence_tripId ON trip_evidence(tripId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_trip_evidence_kind ON trip_evidence(kind)`);
+
+// Alertas priorizadas para la Bandeja Operativa (derivadas de operational_events)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS operational_alerts (
+    id TEXT PRIMARY KEY,
+    companyId TEXT NOT NULL,
+    eventId TEXT,                                    -- operational_events.id que la originó
+    tripId TEXT,
+    driverId TEXT,
+    vehicleId TEXT,
+    level TEXT NOT NULL,                             -- critica | alta | atencion | informativa
+    title TEXT NOT NULL,
+    message TEXT,
+    entityType TEXT,                                 -- trip | driver | vehicle | customer
+    entityLabel TEXT,                                -- "Viaje #4821", "Camión AA123BB"
+    requiresIntervention INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'open',                      -- open | acknowledged | resolved | dismissed
+    acknowledgedBy TEXT,
+    acknowledgedAt TEXT,
+    resolvedBy TEXT,
+    resolvedAt TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (eventId) REFERENCES operational_events(id) ON DELETE SET NULL,
+    FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE SET NULL,
+    FOREIGN KEY (driverId) REFERENCES drivers(id) ON DELETE SET NULL,
+    FOREIGN KEY (vehicleId) REFERENCES vehicles(id) ON DELETE SET NULL
+  )
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_alerts_companyId ON operational_alerts(companyId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_alerts_level ON operational_alerts(level)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_alerts_status ON operational_alerts(status)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_op_alerts_tripId ON operational_alerts(tripId)`);
+
+// Ubicaciones puntuales reportadas por los choferes (cuando comparten ubicación por WhatsApp)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS driver_locations (
+    id TEXT PRIMARY KEY,
+    companyId TEXT NOT NULL,
+    driverId TEXT,
+    tripId TEXT,
+    vehicleId TEXT,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    speed REAL DEFAULT 0,
+    accuracy REAL,
+    label TEXT,
+    source TEXT DEFAULT 'whatsapp',
+    capturedAt TEXT NOT NULL DEFAULT (datetime('now')),
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (driverId) REFERENCES drivers(id) ON DELETE SET NULL,
+    FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE SET NULL,
+    FOREIGN KEY (vehicleId) REFERENCES vehicles(id) ON DELETE SET NULL
+  )
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_driver_locations_tripId ON driver_locations(tripId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_driver_locations_capturedAt ON driver_locations(capturedAt)`);
+
+// Auditoría de interacciones de IA (qué prompt se envió, qué respondió, qué acción ejecutó)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ai_interactions (
+    id TEXT PRIMARY KEY,
+    companyId TEXT NOT NULL,
+    driverId TEXT,
+    tripId TEXT,
+    provider TEXT,                                   -- groq | gemini
+    model TEXT,
+    purpose TEXT,                                    -- interpret_driver | ask_copilot | ocr_image | summarize
+    input TEXT,
+    output TEXT,
+    parsedJson TEXT,
+    confidence REAL,
+    latencyMs INTEGER,
+    success INTEGER DEFAULT 1,
+    error TEXT,
+    createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (companyId) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (driverId) REFERENCES drivers(id) ON DELETE SET NULL,
+    FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE SET NULL
+  )
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_ai_interactions_companyId ON ai_interactions(companyId)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_ai_interactions_purpose ON ai_interactions(purpose)`);
+
+// ===== MIGRACIONES DEFENSIVAS (DBs pre-existentes) =====
+// Algunas tablas en la DB de desarrollo actual no incluyen columnas nuevas (ej: fuel_entries sin companyId/driverId/vehicleId).
+// Estas migraciones agregan columnas faltantes sin romper datos existentes.
+
+function tableHasColumn(table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return rows.some(r => r.name === column);
+}
+
+function safeAddColumn(table: string, column: string, definition: string): void {
+  if (!tableHasColumn(table, column)) {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      console.log(`[migrate] ADD COLUMN ${table}.${column}`);
+    } catch (e) {
+      console.warn(`[migrate] No se pudo agregar ${table}.${column}: ${(e as Error).message}`);
+    }
+  }
+}
+
+function safeCreateIndex(indexName: string, table: string, column: string): void {
+  if (tableHasColumn(table, column)) {
+    try {
+      db.exec(`CREATE INDEX IF NOT EXISTS ${indexName} ON ${table}(${column})`);
+    } catch (e) {
+      // silencioso
+    }
+  }
+}
+
+safeAddColumn("fuel_entries", "companyId", "TEXT NOT NULL DEFAULT 'default-company'");
+safeAddColumn("fuel_entries", "vehicleId", "TEXT");
+safeAddColumn("fuel_entries", "driverId", "TEXT");
+safeAddColumn("fuel_entries", "kmAtFill", "REAL");
+safeAddColumn("fuel_entries", "consumptionLPer100Km", "REAL");
+safeAddColumn("fuel_entries", "anomaly", "INTEGER DEFAULT 0");
 
 // Insertar empresa por defecto
 db.exec(`
@@ -682,6 +867,114 @@ export type ApiResponse<T> = {
   data?: T;
   error?: string;
   message?: string;
+};
+
+// ===== Control Tower 360 — Tipos nuevos (Fase 1) =====
+
+export type OperationalPriority = "critica" | "alta" | "atencion" | "informativa";
+
+export type OperationalEventType =
+  | "departure" | "arrival" | "loading" | "unloading"
+  | "delay" | "breakdown" | "accident" | "tire" | "fuel"
+  | "document" | "location" | "eta_update" | "custom";
+
+export type OperationalEvent = {
+  id: string;
+  companyId: string;
+  tripId?: string;
+  driverId?: string;
+  vehicleId?: string;
+  source: "whatsapp" | "manual" | "gps" | "system";
+  sourceMessageId?: string;
+  type: OperationalEventType;
+  category?: string;
+  priority: OperationalPriority;
+  title?: string;
+  description?: string;
+  metadata?: string; // JSON
+  requiresIntervention: number; // 0/1
+  createdAt: string;
+};
+
+export type OperationalAlert = {
+  id: string;
+  companyId: string;
+  eventId?: string;
+  tripId?: string;
+  driverId?: string;
+  vehicleId?: string;
+  level: OperationalPriority;
+  title: string;
+  message?: string;
+  entityType?: "trip" | "driver" | "vehicle" | "customer";
+  entityLabel?: string;
+  requiresIntervention: number;
+  status: "open" | "acknowledged" | "resolved" | "dismissed";
+  acknowledgedBy?: string;
+  acknowledgedAt?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TripEvidence = {
+  id: string;
+  companyId: string;
+  tripId?: string;
+  driverId?: string;
+  kind: "audio" | "image" | "document" | "location" | "text";
+  title?: string;
+  description?: string;
+  mediaUrl?: string;
+  transcript?: string;
+  metadata?: string; // JSON
+  source: "whatsapp" | "manual" | "upload";
+  sourceMessageId?: string;
+  capturedAt?: string;
+  createdAt: string;
+};
+
+export type DriverLocationPoint = {
+  id: string;
+  companyId: string;
+  driverId?: string;
+  tripId?: string;
+  vehicleId?: string;
+  latitude: number;
+  longitude: number;
+  speed: number;
+  accuracy?: number;
+  label?: string;
+  source: string;
+  capturedAt: string;
+  createdAt: string;
+};
+
+export type AiInteraction = {
+  id: string;
+  companyId: string;
+  driverId?: string;
+  tripId?: string;
+  provider?: string;
+  model?: string;
+  purpose: string;
+  input?: string;
+  output?: string;
+  parsedJson?: string;
+  confidence?: number;
+  latencyMs?: number;
+  success: number;
+  error?: string;
+  createdAt: string;
+};
+
+// Trip con joins comunes (para endpoints que devuelven datos enriquecidos)
+export type TripWithRelations = Trip & {
+  vehiclePlate?: string;
+  driverName?: string;
+  customerName?: string;
+  lastEventAt?: string;
 };
 
 // ===== WhatsApp Message type for database =====
@@ -1246,6 +1539,340 @@ export class DatabaseService {
     );
 
     return this.db.prepare("SELECT * FROM fuel_entries WHERE id = ?").get(id);
+  }
+
+  // ===== Control Tower 360 — Métodos nuevos (Fase 1) =====
+
+  // ---- Operational Events ----
+  createOperationalEvent(data: {
+    companyId: string;
+    tripId?: string;
+    driverId?: string;
+    vehicleId?: string;
+    source?: "whatsapp" | "manual" | "gps" | "system";
+    sourceMessageId?: string;
+    type: OperationalEventType;
+    category?: string;
+    priority?: OperationalPriority;
+    title?: string;
+    description?: string;
+    metadata?: Record<string, unknown>;
+    requiresIntervention?: boolean;
+  }): OperationalEvent {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const priority: OperationalPriority = data.priority || "informativa";
+
+    this.db.prepare(`
+      INSERT INTO operational_events (id, companyId, tripId, driverId, vehicleId, source, sourceMessageId, type, category, priority, title, description, metadata, requiresIntervention, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.companyId,
+      data.tripId || null,
+      data.driverId || null,
+      data.vehicleId || null,
+      data.source || "whatsapp",
+      data.sourceMessageId || null,
+      data.type,
+      data.category || null,
+      priority,
+      data.title || null,
+      data.description || null,
+      data.metadata ? JSON.stringify(data.metadata) : null,
+      data.requiresIntervention ? 1 : 0,
+      now
+    );
+
+    return this.db.prepare("SELECT * FROM operational_events WHERE id = ?").get(id) as OperationalEvent;
+  }
+
+  getOperationalEvents(companyId: string, opts: { tripId?: string; priority?: string; limit?: number } = {}): OperationalEvent[] {
+    let query = "SELECT * FROM operational_events WHERE companyId = ?";
+    const params: (string | number)[] = [companyId];
+    if (opts.tripId) { query += " AND tripId = ?"; params.push(opts.tripId); }
+    if (opts.priority) { query += " AND priority = ?"; params.push(opts.priority); }
+    query += " ORDER BY createdAt DESC LIMIT ?";
+    params.push(opts.limit || 200);
+    return this.db.prepare(query).all(...params) as OperationalEvent[];
+  }
+
+  // ---- Operational Alerts ----
+  createOperationalAlert(data: {
+    companyId: string;
+    eventId?: string;
+    tripId?: string;
+    driverId?: string;
+    vehicleId?: string;
+    level: OperationalPriority;
+    title: string;
+    message?: string;
+    entityType?: "trip" | "driver" | "vehicle" | "customer";
+    entityLabel?: string;
+    requiresIntervention?: boolean;
+  }): OperationalAlert {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO operational_alerts (id, companyId, eventId, tripId, driverId, vehicleId, level, title, message, entityType, entityLabel, requiresIntervention, status, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+    `).run(
+      id,
+      data.companyId,
+      data.eventId || null,
+      data.tripId || null,
+      data.driverId || null,
+      data.vehicleId || null,
+      data.level,
+      data.title,
+      data.message || null,
+      data.entityType || null,
+      data.entityLabel || null,
+      data.requiresIntervention ? 1 : 0,
+      now, now
+    );
+    return this.db.prepare("SELECT * FROM operational_alerts WHERE id = ?").get(id) as OperationalAlert;
+  }
+
+  getOperationalAlerts(companyId: string, opts: { level?: string; status?: string; tripId?: string; limit?: number } = {}): OperationalAlert[] {
+    let query = "SELECT * FROM operational_alerts WHERE companyId = ?";
+    const params: (string | number)[] = [companyId];
+    if (opts.level) { query += " AND level = ?"; params.push(opts.level); }
+    if (opts.status) { query += " AND status = ?"; params.push(opts.status); }
+    if (opts.tripId) { query += " AND tripId = ?"; params.push(opts.tripId); }
+    query += " ORDER BY createdAt DESC LIMIT ?";
+    params.push(opts.limit || 200);
+    return this.db.prepare(query).all(...params) as OperationalAlert[];
+  }
+
+  updateOperationalAlertStatus(id: string, status: "open" | "acknowledged" | "resolved" | "dismissed", userId?: string): OperationalAlert | null {
+    const now = new Date().toISOString();
+    if (status === "acknowledged") {
+      this.db.prepare("UPDATE operational_alerts SET status = ?, acknowledgedBy = ?, acknowledgedAt = ?, updatedAt = ? WHERE id = ?")
+        .run(status, userId || null, now, now, id);
+    } else if (status === "resolved") {
+      this.db.prepare("UPDATE operational_alerts SET status = ?, resolvedBy = ?, resolvedAt = ?, updatedAt = ? WHERE id = ?")
+        .run(status, userId || null, now, now, id);
+    } else {
+      this.db.prepare("UPDATE operational_alerts SET status = ?, updatedAt = ? WHERE id = ?")
+        .run(status, now, id);
+    }
+    return this.db.prepare("SELECT * FROM operational_alerts WHERE id = ?").get(id) as OperationalAlert | null;
+  }
+
+  // ---- Trip Evidence ----
+  createTripEvidence(data: {
+    companyId: string;
+    tripId?: string;
+    driverId?: string;
+    kind: TripEvidence["kind"];
+    title?: string;
+    description?: string;
+    mediaUrl?: string;
+    transcript?: string;
+    metadata?: Record<string, unknown>;
+    source?: TripEvidence["source"];
+    sourceMessageId?: string;
+    capturedAt?: string;
+  }): TripEvidence {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO trip_evidence (id, companyId, tripId, driverId, kind, title, description, mediaUrl, transcript, metadata, source, sourceMessageId, capturedAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.companyId,
+      data.tripId || null,
+      data.driverId || null,
+      data.kind,
+      data.title || null,
+      data.description || null,
+      data.mediaUrl || null,
+      data.transcript || null,
+      data.metadata ? JSON.stringify(data.metadata) : null,
+      data.source || "whatsapp",
+      data.sourceMessageId || null,
+      data.capturedAt || now,
+      now
+    );
+    return this.db.prepare("SELECT * FROM trip_evidence WHERE id = ?").get(id) as TripEvidence;
+  }
+
+  getTripEvidence(companyId: string, opts: { tripId?: string; kind?: string; driverId?: string; limit?: number } = {}): TripEvidence[] {
+    let query = "SELECT * FROM trip_evidence WHERE companyId = ?";
+    const params: (string | number)[] = [companyId];
+    if (opts.tripId) { query += " AND tripId = ?"; params.push(opts.tripId); }
+    if (opts.driverId) { query += " AND driverId = ?"; params.push(opts.driverId); }
+    if (opts.kind) { query += " AND kind = ?"; params.push(opts.kind); }
+    query += " ORDER BY COALESCE(capturedAt, createdAt) DESC LIMIT ?";
+    params.push(opts.limit || 200);
+    return this.db.prepare(query).all(...params) as TripEvidence[];
+  }
+
+  // ---- Driver Locations ----
+  createDriverLocation(data: {
+    companyId: string;
+    driverId?: string;
+    tripId?: string;
+    vehicleId?: string;
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    accuracy?: number;
+    label?: string;
+    source?: string;
+    capturedAt?: string;
+  }): DriverLocationPoint {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO driver_locations (id, companyId, driverId, tripId, vehicleId, latitude, longitude, speed, accuracy, label, source, capturedAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, data.companyId,
+      data.driverId || null, data.tripId || null, data.vehicleId || null,
+      data.latitude, data.longitude, data.speed || 0, data.accuracy || null,
+      data.label || null, data.source || "whatsapp",
+      data.capturedAt || now, now
+    );
+    return this.db.prepare("SELECT * FROM driver_locations WHERE id = ?").get(id) as DriverLocationPoint;
+  }
+
+  // ---- AI Interactions (auditoría) ----
+  createAiInteraction(data: {
+    companyId: string;
+    driverId?: string;
+    tripId?: string;
+    provider?: string;
+    model?: string;
+    purpose: string;
+    input?: string;
+    output?: string;
+    parsedJson?: string;
+    confidence?: number;
+    latencyMs?: number;
+    success?: boolean;
+    error?: string;
+  }): AiInteraction {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO ai_interactions (id, companyId, driverId, tripId, provider, model, purpose, input, output, parsedJson, confidence, latencyMs, success, error, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, data.companyId,
+      data.driverId || null, data.tripId || null,
+      data.provider || null, data.model || null, data.purpose,
+      data.input || null, data.output || null, data.parsedJson || null,
+      data.confidence || null, data.latencyMs || null,
+      data.success === false ? 0 : 1, data.error || null, now
+    );
+    return this.db.prepare("SELECT * FROM ai_interactions WHERE id = ?").get(id) as AiInteraction;
+  }
+
+  // ---- Helpers para Bandeja Operativa (joins enriquecidos) ----
+
+  // Resumen para el dashboard: totales por estado, demoras, incidentes y mensajes recientes
+  getOperationSummary(companyId: string) {
+    const trips = this.getTrips(companyId);
+    const activeStatuses = new Set(["en_route", "loading", "unloading", "delayed", "arrived"]);
+    const activeTrips = trips.filter(t => activeStatuses.has(t.status));
+    const delayedTrips = trips.filter(t => t.status === "delayed");
+    const incidentsOpen = this.db.prepare(
+      "SELECT COUNT(*) as c FROM operational_alerts WHERE companyId = ? AND status = 'open' AND level IN ('critica','alta')"
+    ).get(companyId) as { c: number };
+
+    const incidentTrips = this.db.prepare(
+      "SELECT COUNT(DISTINCT tripId) as c FROM operational_events WHERE companyId = ? AND type IN ('accident','breakdown','tire') AND createdAt >= datetime('now','-1 day')"
+    ).get(companyId) as { c: number };
+
+    const messagesToday = this.db.prepare(
+      "SELECT COUNT(*) as c FROM whatsapp_messages WHERE companyId = ? AND createdAt >= datetime('now','-1 day')"
+    ).get(companyId) as { c: number };
+
+    const driversActive = this.db.prepare(
+      "SELECT COUNT(DISTINCT driverId) as c FROM whatsapp_messages WHERE companyId = ? AND createdAt >= datetime('now','-1 day') AND driverId IS NOT NULL"
+    ).get(companyId) as { c: number };
+
+    // Top alertas que requieren intervención
+    const topAlerts = this.db.prepare(`
+      SELECT a.*, t.origin, t.destination, d.fullName as driverName, v.licensePlate as vehiclePlate
+      FROM operational_alerts a
+      LEFT JOIN trips t ON a.tripId = t.id
+      LEFT JOIN drivers d ON a.driverId = d.id
+      LEFT JOIN vehicles v ON a.vehicleId = v.id
+      WHERE a.companyId = ? AND a.status = 'open' AND a.requiresIntervention = 1
+      ORDER BY
+        CASE a.level WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 WHEN 'atencion' THEN 2 ELSE 3 END,
+        a.createdAt DESC
+      LIMIT 10
+    `).all(companyId);
+
+    return {
+      totals: {
+        activeTrips: activeTrips.length,
+        normalTrips: activeTrips.filter(t => t.status === "en_route" || t.status === "loading" || t.status === "unloading").length,
+        delayedTrips: delayedTrips.length,
+        incidentTrips: incidentTrips.c,
+        criticalOpen: incidentsOpen.c,
+        messagesToday: messagesToday.c,
+        driversActiveToday: driversActive.c
+      },
+      requiresAttention: topAlerts
+    };
+  }
+
+  // Timeline completo de un viaje (eventos operacionales + mensajes clave)
+  getTripTimeline(companyId: string, tripId: string) {
+    const events = this.db.prepare(`
+      SELECT * FROM operational_events
+      WHERE companyId = ? AND tripId = ?
+      ORDER BY createdAt ASC
+    `).all(companyId, tripId) as OperationalEvent[];
+
+    const messages = this.db.prepare(`
+      SELECT id, phone, messageType, content, interpretedAction, createdAt, responseMessage
+      FROM whatsapp_messages
+      WHERE companyId = ? AND tripId = ?
+      ORDER BY createdAt ASC
+    `).all(companyId, tripId) as Array<{
+      id: string; phone: string; messageType: string; content?: string; interpretedAction?: string; createdAt: string; responseMessage?: string;
+    }>;
+
+    const evidence = this.db.prepare(`
+      SELECT * FROM trip_evidence WHERE companyId = ? AND tripId = ? ORDER BY COALESCE(capturedAt, createdAt) ASC
+    `).all(companyId, tripId) as TripEvidence[];
+
+    const locations = this.db.prepare(`
+      SELECT * FROM driver_locations WHERE companyId = ? AND tripId = ? ORDER BY capturedAt ASC
+    `).all(companyId, tripId) as DriverLocationPoint[];
+
+    // Unificar en una sola línea de tiempo ordenada
+    type TimelineItem =
+      | { kind: "event"; at: string; event: OperationalEvent }
+      | { kind: "message"; at: string; message: typeof messages[number] }
+      | { kind: "evidence"; at: string; evidence: TripEvidence }
+      | { kind: "location"; at: string; location: DriverLocationPoint };
+
+    const items: TimelineItem[] = [];
+    events.forEach(e => items.push({ kind: "event", at: e.createdAt, event: e }));
+    messages.forEach(m => items.push({ kind: "message", at: m.createdAt, message: m }));
+    evidence.forEach(ev => items.push({ kind: "evidence", at: ev.capturedAt || ev.createdAt, evidence: ev }));
+    locations.forEach(l => items.push({ kind: "location", at: l.capturedAt, location: l }));
+
+    items.sort((a, b) => a.at.localeCompare(b.at));
+
+    const trip = this.db.prepare(`
+      SELECT t.*, v.licensePlate as vehiclePlate, d.fullName as driverName, c.name as customerName
+      FROM trips t
+      LEFT JOIN vehicles v ON t.vehicleId = v.id
+      LEFT JOIN drivers d ON t.driverId = d.id
+      LEFT JOIN customers c ON t.customerId = c.id
+      WHERE t.id = ? AND t.companyId = ?
+    `).get(tripId, companyId);
+
+    return { trip, timeline: items };
   }
 }
 
