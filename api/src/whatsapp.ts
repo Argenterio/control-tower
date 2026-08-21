@@ -344,6 +344,8 @@ export async function processIncomingWhatsappMessage(
 
   return {
     messageId: savedMessage.id,
+    phone: cleanPhone,
+    remoteJid: payload.remoteJid || (cleanPhone ? `${cleanPhone}@s.whatsapp.net` : undefined),
     driverFound: !!driver,
     driverName: driver?.fullName,
     companyId,

@@ -313,6 +313,7 @@ export interface WhatsappMessage {
 // Payload que llega desde n8n con el mensaje de Evolution API
 export interface WhatsappIncomingPayload {
   phone: string;          // Número del remitente (ej: "5491144551122")
+  remoteJid?: string;     // JID de WhatsApp (ej: "5491144551122@s.whatsapp.net")
   message?: string;       // Contenido de texto
   messageType: WhatsappMessageType;
   mediaUrl?: string;      // URL del archivo si es imagen/audio/doc
@@ -347,6 +348,8 @@ export interface MessageInterpretation {
 // Respuesta del endpoint de WhatsApp
 export interface WhatsappProcessResult {
   messageId: string;
+  phone: string;
+  remoteJid?: string;
   driverFound: boolean;
   driverName?: string;
   companyId?: string;
