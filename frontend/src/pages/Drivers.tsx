@@ -3,7 +3,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
 import type { Driver } from '../types';
-import { Users, Plus, Search, AlertTriangle, MessageSquare, Send, X, Check } from 'lucide-react';
+import { Users, Plus, Search, AlertTriangle, MessageSquare, Send, X, Check, Edit, Trash2 } from 'lucide-react';
+import { AddDriverForm } from '../components/Forms';
+import { useToast } from '../components/Toast';
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
   active: { label: 'Activo', className: 'badge-success' },
@@ -12,12 +14,27 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
 };
 
 export default function DriversPage() {
+  const isExpiringSoon = (date?: string) => {
+    if (!date) return false;
+    const diff = new Date(date).getTime() - Date.now();
+    return diff > 0 && diff < 30 * 24 * 60 * 60 * 1000; // 30 days
+  };
+
+  const isExpired = (date?: string) => {
+    if (!date) return false;
+    return new Date(date).getTime() < Date.now();
+  };
   const { companyId } = useAuth();
+  const { addToast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-
-  // Estado del modal de WhatsApp
+  
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+  
+  // WhatsApp modal states
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [msgText, setMsgText] = useState('');
   const [sending, setSending] = useState(false);
@@ -30,23 +47,35 @@ export default function DriversPage() {
       .finally(() => setLoading(false));
   }, [companyId]);
 
-  const filtered = drivers.filter(d =>
-    d.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    (d.dni || '').includes(search) ||
-    (d.licenseNumber || '').includes(search)
-  );
-
-  const isExpiringSoon = (date?: string) => {
-    if (!date) return false;
-    const diff = new Date(date).getTime() - Date.now();
-    return diff > 0 && diff < 30 * 24 * 60 * 60 * 1000; // 30 days
+  const handleOpenNewDriver = () => {
+    setEditingDriver(null);
+    setIsModalOpen(true);
   };
 
-  const isExpired = (date?: string) => {
-    if (!date) return false;
-    return new Date(date).getTime() < Date.now();
+  const handleOpenEditDriver = (driver: Driver) => {
+    setEditingDriver(driver);
+    setIsModalOpen(true);
   };
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingDriver(null);
+  };
+
+  const handleModalCreated = async (newDriver: Driver) => {
+    if (editingDriver) {
+      // Edit mode
+      setDrivers(prev => prev.map(d => d.id === editingDriver.id ? newDriver : d));
+      addToast('Chofer actualizado con éxito', 'success');
+    } else {
+      // Create mode
+      setDrivers(prev => [newDriver, ...prev]);
+      addToast('Chofer creado con éxito', 'success');
+    }
+    handleCloseModal();
+  };
+
+  // WhatsApp modal handlers
   const handleOpenWhatsapp = (driver: Driver) => {
     setSelectedDriver(driver);
     setMsgText('');
@@ -73,6 +102,12 @@ export default function DriversPage() {
     }
   };
 
+  const filtered = drivers.filter(d =>
+    d.fullName.toLowerCase().includes(search.toLowerCase()) ||
+    (d.dni || '').includes(search) ||
+    (d.licenseNumber || '').includes(search)
+  );
+
   if (loading) {
     return <div className="page-loading"><div className="loading-spinner" /><p>Cargando choferes...</p></div>;
   }
@@ -84,7 +119,7 @@ export default function DriversPage() {
           <h1><Users size={28} className="page-icon" /> Gestión de Choferes</h1>
           <p className="page-subtitle">{drivers.length} choferes registrados en la flota</p>
         </div>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={handleOpenNewDriver}>
           <Plus size={18} /> Nuevo Chofer
         </button>
       </div>
@@ -137,7 +172,16 @@ export default function DriversPage() {
                   <td><span className={`badge ${status.className}`}>{status.label}</span></td>
                   <td>{d.totalTrips}</td>
                   <td>{d.totalKm?.toLocaleString('es-AR')} km</td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td style={{ textAlign: 'center', display: 'flex', gap: 8, justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditDriver(d)}
+                      className="btn btn-secondary"
+                      style={{ padding: '6px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      title="Editar chofer"
+                    >
+                      <Edit size={14} /> Editar
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleOpenWhatsapp(d)}
@@ -157,6 +201,24 @@ export default function DriversPage() {
                     >
                       <MessageSquare size={14} /> WhatsApp
                     </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm(`¿Eliminar chofer ${d.fullName}?`)) return;
+                        try {
+                          await api.updateDriver(d.id, { ...d, status: 'inactive' });
+                          setDrivers(prev => prev.filter(x => x.id !== d.id));
+                          addToast('Chofer desactivado', 'success');
+                        } catch (err: any) {
+                          addToast(`Error: ${err.message}`, 'error');
+                        }
+                      }}
+                      className="btn btn-secondary"
+                      style={{ padding: '6px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: '#f87171', borderColor: 'rgba(239,68,68,0.4)' }}
+                      title="Desactivar chofer"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </td>
                 </tr>
               );
@@ -167,6 +229,15 @@ export default function DriversPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Modal Add/Edit Driver */}
+      <AddDriverForm
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onCreated={handleModalCreated}
+        initialData={editingDriver}
+        saving={false}
+      />
 
       {/* Modal para Enviar WhatsApp Manual */}
       {selectedDriver && (

@@ -1141,6 +1141,35 @@ export class DatabaseService {
     return this.getDriver(id);
   }
 
+  updateDriver(id: string, data: Partial<Driver>): Driver | null {
+    const now = new Date().toISOString();
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (data.fullName !== undefined) { fields.push("fullName = ?"); values.push(data.fullName); }
+    if (data.dni !== undefined) { fields.push("dni = ?"); values.push(data.dni); }
+    if (data.phone !== undefined) { fields.push("phone = ?"); values.push(data.phone); }
+    if (data.email !== undefined) { fields.push("email = ?"); values.push(data.email); }
+    if (data.licenseNumber !== undefined) { fields.push("licenseNumber = ?"); values.push(data.licenseNumber); }
+    if (data.licenseExpiry !== undefined) { fields.push("licenseExpiry = ?"); values.push(data.licenseExpiry); }
+    if (data.status !== undefined) { fields.push("status = ?"); values.push(data.status); }
+    if (data.vehicleId !== undefined) { fields.push("vehicleId = ?"); values.push(data.vehicleId); }
+    if (data.totalTrips !== undefined) { fields.push("totalTrips = ?"); values.push(data.totalTrips); }
+    if (data.totalKm !== undefined) { fields.push("totalKm = ?"); values.push(data.totalKm); }
+
+    fields.push("updatedAt = ?");
+    values.push(now);
+    values.push(id);
+
+    if (fields.length === 0) return null;
+
+    const stmt = this.db.prepare(`UPDATE drivers SET ${fields.join(", ")} WHERE id = ?`);
+    const result = stmt.run(...values);
+
+    if (result.changes === 0) return null;
+    return this.getDriver(id);
+  }
+
   // Customer methods
   getCustomers(companyId: string): Customer[] {
     return this.db.prepare("SELECT * FROM customers WHERE companyId = ?").all(companyId) as Customer[];

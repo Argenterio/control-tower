@@ -121,7 +121,18 @@ export default function EvidencePage() {
                 )}
                 {ev.kind === 'image' && ev.mediaUrl && (
                   <div className="evidence-image">
-                    <img src={ev.mediaUrl} alt={ev.description || 'evidencia'} loading="lazy" />
+                    <a href={ev.mediaUrl} target="_blank" rel="noreferrer" title="Abrir imagen original">
+                      <img 
+                        src={ev.mediaUrl} 
+                        alt={ev.description || 'evidencia'} 
+                        loading="lazy" 
+                        onError={(e) => {
+                          e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiMyZDI5M2IiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiPueUqOaBrOaIkeaUqOingeWkpuaIkTwvdGV4dD48L3N2Zz4=';
+                          e.currentTarget.alt = 'Imagen no disponible (URL expirada)';
+                          e.currentTarget.style.filter = 'grayscale(100%)';
+                        }}
+                      />
+                    </a>
                   </div>
                 )}
                 {ev.description && ev.kind !== 'audio' && (

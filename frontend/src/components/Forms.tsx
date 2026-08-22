@@ -90,6 +90,9 @@ interface DriverFormProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated: (d: Driver) => void;
+  initialData?: Driver | null;
+  onError?: (error: string) => void;
+  saving?: boolean;
 }
 
 interface DriverFormState {
@@ -102,7 +105,7 @@ interface DriverFormState {
   status: 'active' | 'inactive' | 'suspended';
 }
 
-export function AddDriverForm({ isOpen, onClose, onCreated }: DriverFormProps) {
+export function AddDriverForm({ isOpen, onClose, onCreated, initialData, onError, saving: externalSaving }: DriverFormProps) {
   const { companyId } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -116,27 +119,59 @@ export function AddDriverForm({ isOpen, onClose, onCreated }: DriverFormProps) {
     status: 'active',
   });
 
+  // Load initial data when editing
+  useEffect(() => {
+    if (initialData) {
+      setForm({
+        fullName: initialData.fullName,
+        dni: initialData.dni || '',
+        phone: initialData.phone || '',
+        email: initialData.email || '',
+        licenseNumber: initialData.licenseNumber || '',
+        licenseExpiry: initialData.licenseExpiry || '',
+        status: initialData.status || 'active',
+      });
+      setError('');
+    } else {
+      setForm({ fullName: '', dni: '', phone: '', email: '', licenseNumber: '', licenseExpiry: '', status: 'active' });
+      setError('');
+    }
+  }, [initialData, isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.fullName) { setError('El nombre es obligatorio'); return; }
-    if (!form.dni) { setError('El DNI es obligatorio'); return; }
+    if (!form.fullName) { setError('El nombre es obligatorio'); onError?.('El nombre es obligatorio'); return; }
+    if (!form.dni) { setError('El DNI es obligatorio'); onError?.('El DNI es obligatorio'); return; }
+    
+    const isSaving = externalSaving !== undefined ? externalSaving : saving;
+    if (isSaving) return;
+    
     setSaving(true);
     setError('');
+    onError?.('');
     try {
-      const driver = await api.createDriver({ ...form, companyId, totalTrips: 0, totalKm: 0 });
+      let driver: Driver;
+      if (initialData) {
+        driver = await api.updateDriver(initialData.id, { ...form, companyId });
+      } else {
+        driver = await api.createDriver({ ...form, companyId, totalTrips: 0, totalKm: 0 });
+      }
       onCreated(driver);
       onClose();
       setForm({ fullName: '', dni: '', phone: '', email: '', licenseNumber: '', licenseExpiry: '', status: 'active' });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al crear chofer';
+      const msg = err instanceof Error ? err.message : (initialData ? 'Error al actualizar chofer' : 'Error al crear chofer');
       setError(msg);
+      onError?.(msg);
     } finally {
       setSaving(false);
     }
   };
 
+  const currentSaving = externalSaving !== undefined ? externalSaving : saving;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Nuevo Chofer" width="560px">
+    <Modal isOpen={isOpen} onClose={onClose} title={initialData ? "Editar Chofer" : "Nuevo Chofer"} width="560px">
       <form onSubmit={handleSubmit} className="form-grid">
         {error && <div className="form-error">{error}</div>}
         <div className="form-row">
@@ -160,7 +195,7 @@ export function AddDriverForm({ isOpen, onClose, onCreated }: DriverFormProps) {
         </div>
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Guardando...' : 'Guardar Chofer'}</button>
+          <button type="submit" className="btn btn-primary" disabled={currentSaving}>{currentSaving ? 'Guardando...' : (initialData ? 'Actualizar Chofer' : 'Guardar Chofer')}</button>
         </div>
       </form>
     </Modal>
@@ -219,6 +254,96 @@ export function AddCustomerForm({ isOpen, onClose, onCreated }: CustomerFormProp
         <div className="form-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
           <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Guardando...' : 'Guardar Cliente'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Edit Driver Form ───
+interface EditDriverFormProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onUpdated: (d: Driver) => void;
+  driver: Driver | null;
+}
+
+export function EditDriverForm({ isOpen, onClose, onUpdated, driver }: EditDriverFormProps) {
+  const { companyId: _companyId } = useAuth();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState<DriverFormState>({
+    fullName: '',
+    dni: '',
+    phone: '',
+    email: '',
+    licenseNumber: '',
+    licenseExpiry: '',
+    status: 'active',
+  });
+
+  useEffect(() => {
+    if (driver && isOpen) {
+      setForm({
+        fullName: driver.fullName,
+        dni: driver.dni || '',
+        phone: driver.phone || '',
+        email: driver.email || '',
+        licenseNumber: driver.licenseNumber || '',
+        licenseExpiry: driver.licenseExpiry || '',
+        status: driver.status,
+      });
+    }
+  }, [driver, isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.fullName) { setError('El nombre es obligatorio'); return; }
+    if (!form.dni) { setError('El DNI es obligatorio'); return; }
+    if (!driver) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await api.updateDriver(driver.id, { ...form, companyId: driver.companyId });
+      onUpdated(updated);
+      onClose();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al actualizar chofer';
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Editar Chofer" width="560px">
+      <form onSubmit={handleSubmit} className="form-grid">
+        {error && <div className="form-error">{error}</div>}
+        <div className="form-row">
+          <label>Nombre Completo *<input type="text" placeholder="Juan Pérez" value={form.fullName} onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))} required /></label>
+          <label>DNI *<input type="text" placeholder="12345678" value={form.dni} onChange={e => setForm(f => ({ ...f, dni: e.target.value }))} required /></label>
+        </div>
+        <div className="form-row">
+          <label>Teléfono<input type="tel" placeholder="+54 11 1234-5678" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></label>
+          <label>Email<input type="email" placeholder="chofer@empresa.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></label>
+        </div>
+        <div className="form-row">
+          <label>N° Licencia LNH<input type="text" placeholder="LNH-12345" value={form.licenseNumber} onChange={e => setForm(f => ({ ...f, licenseNumber: e.target.value }))} /></label>
+          <label>Vencimiento Licencia<input type="date" value={form.licenseExpiry} onChange={e => setForm(f => ({ ...f, licenseExpiry: e.target.value }))} /></label>
+        </div>
+        <div className="form-row">
+          <label>Estado<select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as Driver['status'] }))}>
+            <option value="active">Activo</option>
+            <option value="inactive">Inactivo</option>
+            <option value="suspended">Suspendido</option>
+          </select></label>
+        </div>
+        <div className="form-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Guardando...' : 'Guardar Cambios'}</button>
         </div>
       </form>
     </Modal>

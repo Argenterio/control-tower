@@ -24,7 +24,6 @@ function MessageTypeIcon({ type, action }: { type: string; action?: string }) {
   return <MessageSquare size={14} />;
 }
 
-
 function statusFromAction(action?: string, _messageType?: string): { label: string; tone: 'ok' | 'warn' | 'alert' | 'info' } {
   if (!action) return { label: 'Recibido', tone: 'info' };
   switch (action) {
@@ -52,6 +51,7 @@ export default function DriverMessagesPage() {
   const [search, setSearch] = useState('');
   const [toneFilter, setToneFilter] = useState<'all' | 'alert' | 'warn' | 'info' | 'ok'>('all');
   const [simulating, setSimulating] = useState(false);
+  const [sendAlertLoading, setSendAlertLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -96,6 +96,22 @@ export default function DriverMessagesPage() {
     }
   }
 
+  async function sendTestAlert() {
+    setSendAlertLoading(true);
+    try {
+      await api.simulateWhatsappMessage(companyId, {
+        message: "ALERTA TEST: Se detectó una anomalía en el sistema",
+        messageType: "text"
+      });
+      await load();
+      alert('Alerta de prueba enviada. Revisá la pestaña Alertas.');
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setSendAlertLoading(false);
+    }
+  }
+
   return (
     <div className="page driver-messages-page">
       <div className="page-header">
@@ -109,6 +125,9 @@ export default function DriverMessagesPage() {
           </button>
           <button className="btn btn-primary" onClick={simulate} disabled={simulating}>
             <Send size={16} /> Simular mensaje
+          </button>
+          <button className="btn btn-warning" onClick={sendTestAlert} disabled={sendAlertLoading}>
+            <AlertTriangle size={16} /> {sendAlertLoading ? 'Enviando...' : 'Enviar alerta test'}
           </button>
         </div>
       </div>

@@ -144,6 +144,12 @@ class ApiClient {
     throw new Error(res.data.error || 'Failed to create driver');
   }
 
+  async updateDriver(id: string, data: Partial<Driver>): Promise<Driver> {
+    const res = await this.http.put<ApiResponse<Driver>>(`/api/drivers/${id}`, data);
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Failed to update driver');
+  }
+
   // === CUSTOMERS ===
   async getCustomers(companyId: string): Promise<Customer[]> {
     const res = await this.http.get<ApiResponse<Customer[]>>('/api/customers', {

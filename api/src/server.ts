@@ -320,6 +320,15 @@ app.post("/api/drivers", requireAuth, (req: express.Request, res: express.Respon
   res.status(201).json({ success: true, data: driver });
 });
 
+app.put("/api/drivers/:id", requireAuth, (req: express.Request, res: express.Response) => {
+  const driver = dbService.updateDriver(req.params.id, req.body);
+  if (driver) {
+    res.json({ success: true, data: driver });
+  } else {
+    res.status(404).json({ success: false, error: "Driver not found" });
+  }
+});
+
 // === LEADS ROUTES (Landing Page Quotes) ===
 app.get("/api/leads", requireAuth, (req: express.Request, res: express.Response) => {
   try {
