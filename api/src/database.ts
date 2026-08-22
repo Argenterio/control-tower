@@ -604,6 +604,16 @@ safeAddColumn("fuel_entries", "kmAtFill", "REAL");
 safeAddColumn("fuel_entries", "consumptionLPer100Km", "REAL");
 safeAddColumn("fuel_entries", "anomaly", "INTEGER DEFAULT 0");
 
+// Idempotencia: cada mensaje de WhatsApp debe tener un messageId único (de Evolution/Meta).
+// Si llega el mismo webhook dos veces, lo detectamos por (companyId, messageId) y evitamos duplicar.
+safeAddColumn("whatsapp_messages", "messageId", "TEXT");
+safeCreateIndex("idx_whatsapp_messages_messageId", "whatsapp_messages", "messageId");
+try {
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_company_msgid ON whatsapp_messages(companyId, messageId)`);
+} catch (e) {
+  console.warn("[migrate] No se pudo crear unique index (puede haber duplicados previos):", (e as Error).message);
+}
+
 // Insertar empresa por defecto
 db.exec(`
   INSERT OR IGNORE INTO companies (id, name, email, phone, address, status)
@@ -990,6 +1000,7 @@ export type WhatsappMessageRow = {
   interpretedAction?: string;
   interpretedConfidence?: number;
   tripId?: string;
+  messageId?: string; // Identificador único provisto por Evolution/Meta para idempotencia
   processed: number; // SQLite uses 0/1 for booleans
   processedAt?: string;
   rawPayload?: string;
@@ -1331,25 +1342,36 @@ export class DatabaseService {
     interpretedAction?: string;
     interpretedConfidence?: number;
     tripId?: string;
+    messageId?: string;
     processed: boolean;
     rawPayload?: string;
     responseMessage?: string;
   }): WhatsappMessageRow {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    
+
     this.db.prepare(`
-      INSERT INTO whatsapp_messages (id, companyId, driverId, phone, direction, messageType, content, mediaUrl, interpretedAction, interpretedConfidence, tripId, processed, processedAt, rawPayload, responseMessage, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO whatsapp_messages (id, companyId, driverId, phone, direction, messageType, content, mediaUrl, interpretedAction, interpretedConfidence, tripId, messageId, processed, processedAt, rawPayload, responseMessage, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, msg.companyId, msg.driverId || null, msg.phone, msg.direction, msg.messageType,
       msg.content || null, msg.mediaUrl || null, msg.interpretedAction || null,
       msg.interpretedConfidence || null, msg.tripId || null,
+      msg.messageId || null,
       msg.processed ? 1 : 0, msg.processed ? now : null,
       msg.rawPayload || null, msg.responseMessage || null, now
     );
-    
+
     return this.db.prepare("SELECT * FROM whatsapp_messages WHERE id = ?").get(id) as WhatsappMessageRow;
+  }
+
+  // Buscar mensaje por messageId externo (idempotencia)
+  findWhatsappMessageByMessageId(companyId: string, messageId: string): WhatsappMessageRow | null {
+    if (!messageId) return null;
+    const row = this.db.prepare(
+      "SELECT * FROM whatsapp_messages WHERE companyId = ? AND messageId = ? ORDER BY createdAt DESC LIMIT 1"
+    ).get(companyId, messageId) as WhatsappMessageRow | undefined;
+    return row || null;
   }
 
   // Crear incidente desde mensaje de WhatsApp

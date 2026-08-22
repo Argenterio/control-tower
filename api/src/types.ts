@@ -313,6 +313,7 @@ export interface WhatsappMessage {
 // Payload que llega desde n8n con el mensaje de Evolution API
 export interface WhatsappIncomingPayload {
   phone: string;          // Número del remitente (ej: "5491144551122")
+  companyId?: string;     // Empresa (default-company si no se detecta chofer)
   remoteJid?: string;     // JID de WhatsApp (ej: "5491144551122@s.whatsapp.net")
   message?: string;       // Contenido de texto
   messageType: WhatsappMessageType;
@@ -356,4 +357,5 @@ export interface WhatsappProcessResult {
   interpretation: MessageInterpretation;
   tripUpdated: boolean;
   incidentCreated: boolean;
+  deduplicated?: boolean; // true cuando se evitó reprocesar por messageId duplicado
 }

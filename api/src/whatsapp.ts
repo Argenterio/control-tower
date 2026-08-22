@@ -148,10 +148,38 @@ export async function processIncomingWhatsappMessage(
 ): Promise<WhatsappProcessResult> {
   const cleanPhone = payload.phone || "";
   const rawText = payload.message || "";
+  const companyId = payload.companyId || "default-company";
+
+  // ===== IDEMPOTENCIA =====
+  // Si el webhook trae messageId (de Evolution/Meta) y ya lo procesamos, devolvemos
+  // el resultado cacheado para evitar duplicados cuando Evolution API reintenta.
+  const incomingMessageId = payload.messageId?.trim();
+  if (incomingMessageId) {
+    const existing = dbService.findWhatsappMessageByMessageId(companyId, incomingMessageId);
+    if (existing) {
+      const driver = existing.driverId ? dbService.getDriver(existing.driverId) : null;
+      return {
+        messageId: existing.id,
+        phone: existing.phone,
+        remoteJid: payload.remoteJid || (cleanPhone ? `${cleanPhone}@s.whatsapp.net` : undefined),
+        driverFound: !!driver,
+        driverName: driver?.fullName,
+        companyId,
+        interpretation: {
+          action: (existing.interpretedAction as any) || "unknown",
+          confidence: existing.interpretedConfidence || 0,
+          responseMessage: existing.responseMessage || "Mensaje ya procesado (idempotencia)."
+        },
+        tripUpdated: false,
+        incidentCreated: false,
+        deduplicated: true
+      };
+    }
+  }
 
   // 1. Identificar chofer y viaje activo
   const driver = dbService.findDriverByPhone(cleanPhone);
-  const companyId = driver?.companyId || "default-company";
+  const resolvedCompanyId = driver?.companyId || companyId;
   const activeTrip = driver ? dbService.getActiveTrip(driver.id) : null;
 
   // 2. Si es audio y NO viene transcripto, lo transcribimos nosotros (Whisper)
@@ -207,6 +235,8 @@ export async function processIncomingWhatsappMessage(
   // 4. Aplicar efectos — Respetar niveles 1 (auto) y 2 (requieren aprobación)
   // `ai` siempre existe: o viene de la IA, o es un shape mínimo del parser determinístico.
 
+  // (companyId ya está definido arriba; usamos el driver-resuelto)
+
   // A. Actualización de estado del viaje (Nivel 1: aplicar si no requiere aprobación)
   if (interpretation.tripUpdate && (!ai || !ai.tripUpdate?.approvalRequired)) {
     try {
@@ -221,7 +251,7 @@ export async function processIncomingWhatsappMessage(
   if (interpretation.incident && driver) {
     try {
       dbService.createIncidentFromWhatsapp({
-        companyId,
+        companyId: resolvedCompanyId,
         vehicleId: driver.vehicleId,
         driverId: driver.id,
         type: interpretation.incident.type,
@@ -241,7 +271,7 @@ export async function processIncomingWhatsappMessage(
         dbService.createGpsPosition(activeTrip.id, payload.latitude, payload.longitude, 0);
       }
       dbService.createDriverLocation({
-        companyId,
+        companyId: resolvedCompanyId,
         driverId: driver?.id,
         tripId: activeTrip?.id,
         vehicleId: driver?.vehicleId,
@@ -262,7 +292,7 @@ export async function processIncomingWhatsappMessage(
         payload.messageType === "audio" ? "audio" :
         payload.messageType === "image" ? "image" : "document";
       dbService.createTripEvidence({
-        companyId,
+        companyId: resolvedCompanyId,
         tripId: activeTrip?.id,
         driverId: driver?.id,
         kind,
@@ -283,7 +313,7 @@ export async function processIncomingWhatsappMessage(
   if (ai.event) {
     try {
       dbService.createOperationalEvent({
-        companyId,
+        companyId: resolvedCompanyId,
         tripId: activeTrip?.id,
         driverId: driver?.id,
         vehicleId: driver?.vehicleId,
@@ -308,7 +338,7 @@ export async function processIncomingWhatsappMessage(
     try {
       const entityLabel = ai.alert?.entityLabel || (activeTrip ? `Viaje #${activeTrip.id.replace('trip-', '')}` : (driver ? driver.fullName : "Operación"));
       dbService.createOperationalAlert({
-        companyId,
+        companyId: resolvedCompanyId,
         tripId: activeTrip?.id,
         driverId: driver?.id,
         vehicleId: driver?.vehicleId,
@@ -327,7 +357,7 @@ export async function processIncomingWhatsappMessage(
 
   // 5. Guardar mensaje en whatsapp_messages (auditoría)
   const savedMessage = dbService.createWhatsappMessage({
-    companyId,
+    companyId: resolvedCompanyId,
     driverId: driver?.id,
     phone: cleanPhone,
     direction: "incoming",
@@ -337,6 +367,7 @@ export async function processIncomingWhatsappMessage(
     interpretedAction: interpretation.action,
     interpretedConfidence: interpretation.confidence,
     tripId: activeTrip?.id,
+    messageId: incomingMessageId,
     processed: true,
     rawPayload: payload.rawPayload || JSON.stringify(payload),
     responseMessage: interpretation.responseMessage

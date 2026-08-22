@@ -732,7 +732,61 @@ app.get("/api/trips/:id/timeline", requireAuth, (req: express.Request, res: expr
   res.json({ success: true, data });
 });
 
-// GET /api/operation/inbox - Bandeja de Mensajes de Choferes (join whatsapp_messages + driver + trip)
+// POST /api/operation/dedupe - Limpia duplicados existentes en whatsapp_messages
+// Estrategia: para cada (companyId, messageId) con duplicados, deja solo el más reciente
+// y borra el resto. Si NO hay messageId, borra duplicados que tengan el mismo (phone, content, createdAt-truncado-a-segundo).
+app.post("/api/operation/dedupe", requireAuth, (req: express.Request, res: express.Response) => {
+  const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
+  try {
+    const beforeCount = (dbService.getWhatsappMessages(companyId, 100000) as unknown as { length: number }).length;
+
+    // 1. Borrar duplicados por (companyId, messageId) dejando el más reciente
+    rawDb.exec(`
+      DELETE FROM whatsapp_messages
+      WHERE companyId = '${companyId}'
+        AND messageId IS NOT NULL
+        AND messageId != ''
+        AND id NOT IN (
+          SELECT MAX(id) FROM whatsapp_messages
+          WHERE companyId = '${companyId}' AND messageId IS NOT NULL AND messageId != ''
+          GROUP BY companyId, messageId
+        )
+    `);
+
+    // 2. Borrar duplicados "huérfanos" (sin messageId) por phone+contenido+minuto
+    rawDb.exec(`
+      DELETE FROM whatsapp_messages
+      WHERE companyId = '${companyId}'
+        AND (messageId IS NULL OR messageId = '')
+        AND id NOT IN (
+          SELECT MAX(id) FROM whatsapp_messages
+          WHERE companyId = '${companyId}' AND (messageId IS NULL OR messageId = '')
+          GROUP BY phone, COALESCE(content, ''), substr(createdAt, 1, 16)
+        )
+    `);
+
+    // 3. Crear el índice único para evitar futuros duplicados
+    try {
+      rawDb.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_company_msgid ON whatsapp_messages(companyId, messageId) WHERE messageId IS NOT NULL AND messageId != ''`);
+    } catch (e) {
+      console.warn("[dedupe] No se pudo crear unique index:", (e as Error).message);
+    }
+
+    const afterCount = (dbService.getWhatsappMessages(companyId, 100000) as unknown as { length: number }).length;
+    res.json({
+      success: true,
+      data: {
+        companyId,
+        beforeCount,
+        afterCount,
+        removed: beforeCount - afterCount
+      },
+      message: `Se eliminaron ${beforeCount - afterCount} mensajes duplicados.`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
 app.get("/api/operation/inbox", requireAuth, (req: express.Request, res: express.Response) => {
   const companyId = (req.query.companyId as string) || (res.locals.auth?.companyId) || "default-company";
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 200;
