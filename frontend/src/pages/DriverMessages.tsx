@@ -89,8 +89,14 @@ export default function DriverMessagesPage() {
         { message: "Acabo de llegar a destino", messageType: "text" }
       ];
       const pick = presets[Math.floor(Math.random() * presets.length)];
-      await api.simulateWhatsappMessage(companyId, pick);
+      const result = await api.simulateWhatsappMessage(companyId, pick);
+      if (result?.success === false) {
+        alert(`Error: ${result.error || 'Error desconocido'}`);
+        return;
+      }
       await load();
+    } catch (err: any) {
+      alert(`Error al simular: ${err.message || err}`);
     } finally {
       setSimulating(false);
     }

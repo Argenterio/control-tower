@@ -551,6 +551,9 @@ app.post("/api/whatsapp/incoming", async (req: express.Request, res: express.Res
       return res.status(400).json({ success: false, error: "El campo 'phone' es requerido" });
     }
 
+    // Log diagnóstico: ver qué campos envía n8n realmente
+    console.log(`[webhook] phone=${payload.phone} messageType=${payload.messageType} mediaUrl=${payload.mediaUrl ? payload.mediaUrl.substring(0, 80) + "..." : "MISSING"} fromMe=${payload.fromMe} messageId=${payload.messageId || "MISSING"}`);
+
     const result = await processIncomingWhatsappMessage(payload);
     res.json({
       success: true,
@@ -658,11 +661,12 @@ app.post("/api/whatsapp/send", requireAuth, async (req: express.Request, res: ex
 // POST /api/whatsapp/simulate - Endpoint para simular mensaje de chofer desde el Frontend
 app.post("/api/whatsapp/simulate", requireAuth, async (req: express.Request, res: express.Response) => {
   try {
-    const { phone, message, messageType, latitude, longitude } = req.body;
+    const { phone, message, messageType, latitude, longitude, companyId } = req.body;
     const payload: WhatsappIncomingPayload = {
-      phone: phone || "+54 9 11 4455-1122", // Default: Carlos Rodríguez
+      phone: phone || "+54 9 11 4455-1122",
       message: message || "Salí hacia Córdoba",
       messageType: messageType || "text",
+      companyId: companyId || undefined,
       latitude,
       longitude,
       timestamp: new Date().toISOString(),
