@@ -187,56 +187,81 @@ export function interpretDriverMessage(
 }
 
 // =====================================================
+// DEFENSAS ANTI-LOOP (evitan que el bot se bannee a sí mismo)
+// =====================================================
+
+// Ventana de debounce: no generamos más de 1 respuesta por teléfono en este lapso.
+// Rompe cualquier loop aunque n8n reenvíe el mensaje saliente con el teléfono del chofer.
+const LOOP_GUARD_MS = Number(process.env.LOOP_GUARD_MS || 30000);
+const lastResponseByPhone = new Map<string, number>();
+
+// Frases que el bot envía como respuesta propia. Si un mensaje las contiene, lo ignoramos
+// (backstop contra loops donde el mensaje saliente vuelve como entrante).
+const OWN_RESPONSE_MARKERS = [
+  "mensaje recibido en control tower 360",
+  "tu supervisor lo tiene disponible",
+  "🟢 procesado",
+  "soy control tower 360"
+];
+
+function extractFromMeFromRaw(raw?: string): boolean {
+  if (!raw) return false;
+  try {
+    const obj = JSON.parse(raw);
+    if (obj?.key?.fromMe === true) return true;
+    if (obj?.fromMe === true) return true;
+    if (obj?.data?.key?.fromMe === true) return true;
+    if (obj?.data?.fromMe === true) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function ignoredResult(payload: WhatsappIncomingPayload, reason: string): WhatsappProcessResult {
+  return {
+    messageId: "",
+    phone: payload.phone || "",
+    remoteJid: payload.remoteJid || "",
+    driverFound: false,
+    driverName: undefined,
+    companyId: payload.companyId || "default-company",
+    interpretation: { action: "ignored", confidence: 1, responseMessage: reason },
+    tripUpdated: false,
+    incidentCreated: false,
+    deduplicated: true
+  };
+}
+
+// =====================================================
 // PROCESO PRINCIPAL
 // =====================================================
 export async function processIncomingWhatsappMessage(
   payload: WhatsappIncomingPayload
 ): Promise<WhatsappProcessResult> {
-  // Ignorar mensajes propios del bot (fromMe = true o phone = número del bot)
-  // Evita loop infinito: el bot responde -> Evolution dispara webhook del mensaje saliente -> bot procesa y responde de nuevo
-  if (payload.fromMe === true) {
-    return {
-      messageId: "",
-      phone: payload.phone || "",
-      remoteJid: payload.remoteJid || "",
-      driverFound: false,
-      driverName: undefined,
-      companyId: payload.companyId || "default-company",
-      interpretation: {
-        action: "ignored",
-        confidence: 1,
-        responseMessage: "Mensaje propio del bot ignorado (fromMe=true)."
-      },
-      tripUpdated: false,
-      incidentCreated: false,
-      deduplicated: true
-    };
+  // ===== DEFENSA 1: fromMe (mensaje enviado por el propio bot) =====
+  // Puede venir en el campo plano o dentro del rawPayload de Evolution API.
+  const fromMe = payload.fromMe === true || extractFromMeFromRaw(payload.rawPayload);
+  if (fromMe) {
+    return ignoredResult(payload, "Mensaje propio del bot ignorado (fromMe=true).");
   }
 
-  // También ignorar si el phone/remoteJid coincide con el número propio del bot (configurable vía env)
+  // ===== DEFENSA 2: número propio del bot =====
   const BOT_PHONE = process.env.BOT_PHONE || "5491173719972";
   const cleanPhone = (payload.phone || "").replace("@s.whatsapp.net", "").replace("@c.us", "");
-  const remotePhone = (payload.remoteJid || "").replace("@s.whatsapp.net", "").replace("@c.us", "");
-  if (cleanPhone === BOT_PHONE || remotePhone === BOT_PHONE) {
-    return {
-      messageId: "",
-      phone: payload.phone || "",
-      remoteJid: payload.remoteJid || "",
-      driverFound: false,
-      driverName: undefined,
-      companyId: payload.companyId || "default-company",
-      interpretation: {
-        action: "ignored",
-        confidence: 1,
-        responseMessage: `Mensaje del número del bot (${BOT_PHONE}) ignorado.`
-      },
-      tripUpdated: false,
-      incidentCreated: false,
-      deduplicated: true
-    };
+  const _remotePhone = (payload.remoteJid || "").replace("@s.whatsapp.net", "").replace("@c.us", "");
+  if (cleanPhone === BOT_PHONE || _remotePhone === BOT_PHONE) {
+    return ignoredResult(payload, `Mensaje del número del bot (${BOT_PHONE}) ignorado.`);
   }
 
   const rawText = payload.message || "";
+
+  // ===== DEFENSA 3: backstop de contenido (frases propias del bot) =====
+  const norm = normalizeText(rawText);
+  if (OWN_RESPONSE_MARKERS.some(m => norm.includes(m))) {
+    return ignoredResult(payload, "Mensaje coincide con respuesta propia del bot; ignorado.");
+  }
+
   const companyId = payload.companyId || "default-company";
 
   // ===== IDEMPOTENCIA =====
@@ -264,6 +289,16 @@ export async function processIncomingWhatsappMessage(
         deduplicated: true
       };
     }
+  }
+
+  // ===== DEFENSA 4: debounce por teléfono =====
+  // Backstop final: si ya generamos una respuesta para este teléfono hace poco,
+  // no generamos otra. Esto garantiza que, pase lo que pase en n8n/Evolution,
+  // el bot nunca dispara un loop de respuestas que lo banee.
+  const now = Date.now();
+  const lastResp = lastResponseByPhone.get(cleanPhone);
+  if (lastResp && now - lastResp < LOOP_GUARD_MS) {
+    return ignoredResult(payload, `Debounce anti-loop: respuesta reciente para ${cleanPhone}.`);
   }
 
   // 1. Identificar chofer y viaje activo
@@ -467,6 +502,9 @@ export async function processIncomingWhatsappMessage(
     rawPayload: payload.rawPayload || JSON.stringify(payload),
     responseMessage: interpretation.responseMessage
   });
+
+  // Registrar timestamp de respuesta para el debounce anti-loop (Defensa 4)
+  lastResponseByPhone.set(cleanPhone, Date.now());
 
   return {
     messageId: savedMessage.id,
