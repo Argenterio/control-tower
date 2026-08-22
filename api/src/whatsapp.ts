@@ -43,18 +43,30 @@ function extFromUrl(url: string, contentType?: string): string {
 async function downloadAndStoreMedia(url: string, kind: string): Promise<string | null> {
   if (!url || !/^https?:\/\//i.test(url)) return null;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
+    console.log(`[media] Descargando ${kind}: ${url.substring(0, 100)}...`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000); // 15s timeout
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      console.warn(`[media] HTTP ${res.status} al descargar ${kind} de ${url.substring(0, 80)}`);
+      return null;
+    }
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length === 0) return null;
+    if (buf.length === 0) {
+      console.warn(`[media] Archivo vacío para ${kind} de ${url.substring(0, 80)}`);
+      return null;
+    }
     const contentType = res.headers.get("content-type") || "";
     const ext = extFromUrl(url, contentType) || (kind === "audio" ? "ogg" : "jpg");
     ensureUploadDir();
     const filename = `${crypto.randomUUID()}.${ext}`;
     fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
-    return `/api/media/${filename}`;
+    const localPath = `/api/media/${filename}`;
+    console.log(`[media] Guardado OK: ${localPath} (${(buf.length / 1024).toFixed(1)} KB, ${contentType})`);
+    return localPath;
   } catch (e) {
-    console.warn("[downloadAndStoreMedia] falló:", (e as Error).message);
+    console.warn(`[media] Error descargando ${kind}: ${(e as Error).message} | URL: ${url.substring(0, 80)}`);
     return null;
   }
 }
@@ -204,6 +216,26 @@ const OWN_RESPONSE_MARKERS = [
   "soy control tower 360"
 ];
 
+// DEFENSA GLOBAL: rate limiter por IP/origen
+// Si llegan más de 20 webhooks en 10 segundos desde la misma fuente, bloqueamos todo.
+const GLOBAL_RATE_WINDOW_MS = 10_000;
+const GLOBAL_RATE_MAX = 20;
+const webhookTimestamps: number[] = [];
+
+function isGloballyRateLimited(): boolean {
+  const now = Date.now();
+  webhookTimestamps.push(now);
+  // Limpiar timestamps viejos
+  while (webhookTimestamps.length > 0 && webhookTimestamps[0] < now - GLOBAL_RATE_WINDOW_MS) {
+    webhookTimestamps.shift();
+  }
+  if (webhookTimestamps.length > GLOBAL_RATE_MAX) {
+    console.error(`[anti-loop] RATE LIMIT GLOBAL: ${webhookTimestamps.length} webhooks en los últimos ${GLOBAL_RATE_WINDOW_MS/1000}s`);
+    return true;
+  }
+  return false;
+}
+
 function extractFromMeFromRaw(raw?: string): boolean {
   if (!raw) return false;
   try {
@@ -219,6 +251,9 @@ function extractFromMeFromRaw(raw?: string): boolean {
 }
 
 function ignoredResult(payload: WhatsappIncomingPayload, reason: string): WhatsappProcessResult {
+  // IMPORTANTE: responseMessage DEBE ser "" (vacío) para que n8n no envíe nada de vuelta.
+  // Si devolvemos texto, n8n lo envía al chofer → puede generar loop infinito y ban de Meta.
+  console.log(`[anti-loop] Ignorado: ${reason} | phone=${payload.phone} remoteJid=${payload.remoteJid}`);
   return {
     messageId: "",
     phone: payload.phone || "",
@@ -226,7 +261,7 @@ function ignoredResult(payload: WhatsappIncomingPayload, reason: string): Whatsa
     driverFound: false,
     driverName: undefined,
     companyId: payload.companyId || "default-company",
-    interpretation: { action: "ignored", confidence: 1, responseMessage: reason },
+    interpretation: { action: "ignored", confidence: 1, responseMessage: "" },
     tripUpdated: false,
     incidentCreated: false,
     deduplicated: true
@@ -239,6 +274,11 @@ function ignoredResult(payload: WhatsappIncomingPayload, reason: string): Whatsa
 export async function processIncomingWhatsappMessage(
   payload: WhatsappIncomingPayload
 ): Promise<WhatsappProcessResult> {
+  // ===== DEFENSA 0: Rate limit global (máximo 20 webhooks por 10s) =====
+  if (isGloballyRateLimited()) {
+    return ignoredResult(payload, "Rate limit global activado. Webhooks bloqueados temporalmente.");
+  }
+
   // ===== DEFENSA 1: fromMe (mensaje enviado por el propio bot) =====
   // Puede venir en el campo plano o dentro del rawPayload de Evolution API.
   const fromMe = payload.fromMe === true || extractFromMeFromRaw(payload.rawPayload);
@@ -411,6 +451,7 @@ export async function processIncomingWhatsappMessage(
 
   // D. Evidencia (audio, imagen, documento) -> trip_evidence
   if ((payload.messageType === "image" || payload.messageType === "audio" || payload.messageType === "document") && (payload.mediaUrl || transcript)) {
+    console.log(`[evidence] Procesando ${payload.messageType} | mediaUrl=${payload.mediaUrl ? "SI" : "NO"} | phone=${cleanPhone}`);
     try {
       const kind: "audio" | "image" | "document" =
         payload.messageType === "audio" ? "audio" :
@@ -434,9 +475,13 @@ export async function processIncomingWhatsappMessage(
         capturedAt: payload.timestamp
       });
       evidenceCreated = true;
+      console.log(`[evidence] Guardada OK: kind=${kind} storedUrl=${storedMediaUrl || "none"}`);
     } catch (err) {
-      console.error("Error al guardar evidencia:", err);
+      console.error("[evidence] Error al guardar evidencia:", err);
     }
+  } else if (payload.messageType === "image" || payload.messageType === "audio" || payload.messageType === "document") {
+    // MediaType es media pero no hay mediaUrl ni transcript → algo falló en n8n
+    console.warn(`[evidence] ${payload.messageType} recibido pero SIN mediaUrl ni transcript. phone=${cleanPhone} | n8n no está enviando el contenido multimedia.`);
   }
 
   // E. Evento operacional (siempre, tanto si vino de IA como del parser determinístico)
