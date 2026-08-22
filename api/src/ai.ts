@@ -286,7 +286,7 @@ export type InterpretResult = {
 };
 
 /**
- * Interpreta el mensaje de un chofer. Devuelve:
+ * Interpreta el mensaje de un chofer (texto, audio, imagen, documento, ubicación). Devuelve:
  *  - interpretation estructurada (json validado)
  *  - provider / model / latency para auditoría
  *  - null si la IA falló (queda el fallback de reglas)
@@ -294,20 +294,39 @@ export type InterpretResult = {
 export async function interpretDriverMessageWithAI(
   rawText: string,
   driver: (Driver & { companyName?: string }) | null,
-  activeTrip: Trip | null
+  activeTrip: Trip | null,
+  options: {
+    messageType?: "text" | "audio" | "image" | "document" | "location";
+    mediaUrl?: string;
+    caption?: string;
+  } = {}
 ): Promise<InterpretResult | null> {
-  if (!rawText || rawText.trim().length < 2) return null;
+  const msgType = options.messageType || "text";
+  const hasText = rawText && rawText.trim().length >= 2;
+  const isMedia = msgType === "image" || msgType === "audio" || msgType === "document" || msgType === "location";
+
+  if (!hasText && !isMedia) return null;
 
   const tripContext = activeTrip
-    ? `Viaje Activo: id=${activeTrip.id}, origen=${activeTrip.origin}, destino=${activeTrip.destination}, estado=${activeTrip.status}`
-    : "Sin viaje activo";
+    ? `Viaje Activo: #${activeTrip.id.replace(/^trip-/, '')} | Origen: ${activeTrip.origin} -> Destino: ${activeTrip.destination} | Estado actual: ${activeTrip.status}`
+    : "Sin viaje activo asignado actualmente";
+
+  let mediaContext = "";
+  if (msgType === "image") {
+    mediaContext = `\n[TIPO DE MENSAJE: IMAGEN / FOTOGRAFÍA ADJUNTA]${rawText ? `\nEpígrafe/Descripción que acompaña la foto: "${rawText}"` : "\n(Foto enviada sin texto adicional. Ejemplos comunes: remito firmado, ticket de gasoil, foto de neumático o estado del camión)."}`;
+  } else if (msgType === "audio") {
+    mediaContext = `\n[TIPO DE MENSAJE: AUDIO / NOTA DE VOZ]${rawText ? `\nTranscripción de voz: "${rawText}"` : "\n(Audio recibido sin transcripción)."}`;
+  } else if (msgType === "document") {
+    mediaContext = `\n[TIPO DE MENSAJE: DOCUMENTO ADJUNTO (PDF / Archivo)]${rawText ? `\nDetalle: "${rawText}"` : ""}`;
+  } else if (msgType === "location") {
+    mediaContext = `\n[TIPO DE MENSAJE: UBICACIÓN GPS COMPARTIDA]${rawText ? `\nDetalle: "${rawText}"` : ""}`;
+  }
 
   const userPrompt = `Chofer: ${driver ? driver.fullName : "Desconocido"} (${driver?.phone || "s/n"})
-Empresa: ${driver?.companyName || "Transporte"}
+Empresa: ${driver?.companyName || "Transportes Pampeana S.A."}
 ${tripContext}
-
-Mensaje del chofer:
-"${rawText}"`;
+${mediaContext}
+${!mediaContext ? `\nMensaje del chofer:\n"${rawText}"` : ""}`;
 
   const t0 = Date.now();
   try {
@@ -320,11 +339,26 @@ Mensaje del chofer:
     const parsed = JSON.parse(clean) as AiDriverInterpretation;
 
     // Saneamiento de campos críticos
-    if (typeof parsed.confidence !== "number") parsed.confidence = 0.8;
+    if (typeof parsed.confidence !== "number") parsed.confidence = 0.85;
     if (!parsed.priority) parsed.priority = "informativa";
     if (typeof parsed.requiresIntervention !== "boolean") parsed.requiresIntervention = parsed.priority === "critica" || parsed.priority === "alta";
-    if (!parsed.action) parsed.action = "general_message";
-    if (!parsed.responseMessage) parsed.responseMessage = "Mensaje recibido y registrado en Control Tower 360.";
+    if (!parsed.action) {
+      if (msgType === "image") parsed.action = "document_upload";
+      else if (msgType === "audio") parsed.action = "general_message";
+      else if (msgType === "location") parsed.action = "location_share";
+      else parsed.action = "general_message";
+    }
+    if (!parsed.responseMessage) {
+      if (msgType === "image") {
+        parsed.responseMessage = activeTrip
+          ? `📸 Imagen recibida y guardada como evidencia en el Viaje #${activeTrip.id.replace(/^trip-/, '')}.`
+          : `📸 Imagen recibida y archivada en el panel de control.`;
+      } else if (msgType === "audio") {
+        parsed.responseMessage = `🎙️ Audio recibido y registrado en Control Tower 360.`;
+      } else {
+        parsed.responseMessage = "Mensaje recibido y registrado en Control Tower 360.";
+      }
+    }
 
     // Si hay viaje activo y la IA sugiere tripUpdate, inyectar tripId si no lo puso
     if (parsed.tripUpdate && activeTrip && !parsed.tripUpdate.tripId) {
@@ -333,18 +367,19 @@ Mensaje del chofer:
 
     // Si no puso event pero la action es clara, autoderivar
     if (!parsed.event && activeTrip) {
+      const summaryText = rawText || (msgType === "image" ? "Fotografía adjunta" : msgType === "audio" ? "Nota de voz" : "Mensaje");
       const map: Record<string, AiDriverInterpretation["event"]> = {
-        trip_departure: { type: "departure", title: "Salida confirmada", description: rawText },
-        trip_arrival: { type: "arrival", title: "Llegada confirmada", description: rawText },
-        loading: { type: "loading", title: "Inicio de carga", description: rawText },
-        unloading: { type: "unloading", title: "Inicio de descarga", description: rawText },
-        delay: { type: "delay", title: "Demora reportada", description: rawText, metadata: { demoraMinutos: parsed.eta?.demoraMinutos } },
-        breakdown: { type: "breakdown", title: "Avería reportada", description: rawText, category: "vehicle" },
-        accident: { type: "accident", title: "Accidente reportado", description: rawText, category: "vehicle" },
-        tire_issue: { type: "tire", title: "Problema de neumático", description: rawText, category: "vehicle" },
-        fuel_stop: { type: "fuel", title: "Parada de combustible", description: rawText },
-        document_upload: { type: "document", title: "Evidencia/documento recibido", description: rawText },
-        location_share: { type: "location", title: "Ubicación compartida", description: rawText }
+        trip_departure: { type: "departure", title: "Salida confirmada", description: summaryText },
+        trip_arrival: { type: "arrival", title: "Llegada confirmada", description: summaryText },
+        loading: { type: "loading", title: "Inicio de carga", description: summaryText },
+        unloading: { type: "unloading", title: "Inicio de descarga", description: summaryText },
+        delay: { type: "delay", title: "Demora reportada", description: summaryText, metadata: { demoraMinutos: parsed.eta?.demoraMinutos } },
+        breakdown: { type: "breakdown", title: "Avería reportada", description: summaryText, category: "vehicle" },
+        accident: { type: "accident", title: "Accidente reportado", description: summaryText, category: "vehicle" },
+        tire_issue: { type: "tire", title: "Problema de neumático", description: summaryText, category: "vehicle" },
+        fuel_stop: { type: "fuel", title: "Parada de combustible / Ticket cargado", description: summaryText },
+        document_upload: { type: "document", title: msgType === "image" ? "Foto / Evidencia recibida" : "Documento recibido", description: summaryText },
+        location_share: { type: "location", title: "Ubicación compartida", description: summaryText }
       };
       parsed.event = map[parsed.action] || null;
     }
@@ -371,9 +406,14 @@ Mensaje del chofer:
       }
     }
 
-    return { interpretation: parsed, provider, model, latencyMs: Date.now() - t0 };
+    return {
+      interpretation: parsed,
+      provider,
+      model,
+      latencyMs: Date.now() - t0
+    };
   } catch (err) {
-    // Registrar fallo
+    console.error("[ai] interpretDriverMessageWithAI error:", err);
     if (driver?.companyId) {
       try {
         dbService.createAiInteraction({
@@ -390,7 +430,6 @@ Mensaje del chofer:
         });
       } catch {}
     }
-    console.warn("[interpretDriverMessageWithAI] Falló, usando parser determinístico:", (err as Error).message);
     return null;
   }
 }

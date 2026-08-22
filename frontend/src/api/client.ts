@@ -316,10 +316,38 @@ class ApiClient {
     return res.data.data || [];
   }
 
-  async simulateWhatsappMessage(companyId: string, data: { phone?: string; message?: string; messageType?: string; latitude?: number; longitude?: number }): Promise<any> {
+  async simulateWhatsappMessage(companyId: string, data: { phone?: string; message?: string; messageType?: string; mediaUrl?: string; latitude?: number; longitude?: number; pushName?: string }): Promise<any> {
     const res = await this.http.post<ApiResponse<any>>('/api/whatsapp/simulate', { companyId, ...data });
     return res.data;
   }
+
+  // Generic request methods for flexibility
+  async post<T = any>(url: string, data?: any, config?: any): Promise<{ data: T }> {
+    const res = await this.http.post<T>(url, data, config);
+    return { data: res.data };
+  }
+
+  async get<T = any>(url: string, config?: any): Promise<{ data: T }> {
+    const res = await this.http.get<T>(url, config);
+    return { data: res.data };
+  }
+
+  async patch<T = any>(url: string, data?: any, config?: any): Promise<{ data: T }> {
+    const res = await this.http.patch<T>(url, data, config);
+    return { data: res.data };
+  }
+}
+
+// Helper para resolver URLs de multimedia servidas por la API
+export function resolveMediaUrl(url?: string | null): string {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
+  const baseUrl = import.meta.env.PROD 
+    ? 'https://api.generarise.space' 
+    : (import.meta.env.VITE_API_URL || 'http://localhost:3000');
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  const cleanPath = url.replace(/^\/+/, '');
+  return `${cleanBase}/${cleanPath}`;
 }
 
 // Singleton export

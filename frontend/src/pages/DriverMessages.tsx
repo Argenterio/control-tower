@@ -2,7 +2,7 @@
 // Tabla: Hora | Chofer | Viaje | Tipo | Información | Estado
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import api from '../api/client';
+import api, { resolveMediaUrl } from '../api/client';
 import type { InboxMessage } from '../types';
 import {
   MessageSquare, Mic, Image as ImageIcon, FileText, MapPin,
@@ -214,7 +214,27 @@ export default function DriverMessagesPage() {
                     </span>
                   </div>
                   <div className="td td-info">
-                    <div className="info-text">{m.content || (m.mediaUrl ? '(archivo adjunto)' : '—')}</div>
+                    <div className="info-text">
+                      {m.content || (m.mediaUrl ? (m.messageType === 'image' ? '📸 Fotografía adjunta' : m.messageType === 'audio' ? '🎙️ Nota de voz' : '📎 Documento adjunto') : '—')}
+                    </div>
+                    {m.mediaUrl && (
+                      <div style={{ marginTop: 6 }}>
+                        {m.messageType === 'image' && (
+                          <a href={resolveMediaUrl(m.mediaUrl)} target="_blank" rel="noreferrer" title="Ver imagen completa">
+                            <img
+                              src={resolveMediaUrl(m.mediaUrl)}
+                              alt="Adjunto"
+                              style={{ maxHeight: 60, maxWidth: 120, borderRadius: 4, objectFit: 'cover', border: '1px solid #334155' }}
+                            />
+                          </a>
+                        )}
+                        {m.messageType === 'audio' && (
+                          <audio controls preload="none" src={resolveMediaUrl(m.mediaUrl)} style={{ height: 28, maxWidth: 220 }}>
+                            Audio
+                          </audio>
+                        )}
+                      </div>
+                    )}
                     {m.responseMessage && (
                       <div className="info-reply">↳ {m.responseMessage.slice(0, 110)}{m.responseMessage.length > 110 ? '…' : ''}</div>
                     )}

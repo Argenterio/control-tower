@@ -1,7 +1,7 @@
 // Evidencias — Audios, fotos, documentos, ubicaciones y mensajes clave
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import api from '../api/client';
+import api, { resolveMediaUrl } from '../api/client';
 import type { TripEvidence } from '../types';
 import {
   Image as ImageIcon, Mic, FileText, MapPin, RefreshCw, Search,
@@ -105,6 +105,7 @@ export default function EvidencePage() {
         {filtered.map(ev => {
           const meta = KIND_META[ev.kind] || KIND_META.text;
           const Icon = meta.icon;
+          const resolvedUrl = resolveMediaUrl(ev.mediaUrl);
           return (
             <div key={ev.id} className="evidence-card" style={{ borderLeftColor: meta.color }}>
               <div className="evidence-head">
@@ -116,8 +117,8 @@ export default function EvidencePage() {
               <div className="evidence-body">
                 {ev.kind === 'audio' && (
                   <div className="evidence-audio">
-                    {ev.mediaUrl && (
-                      <audio controls preload="metadata" src={ev.mediaUrl}>
+                    {resolvedUrl && (
+                      <audio controls preload="metadata" src={resolvedUrl}>
                         Tu navegador no soporta el elemento de audio.
                       </audio>
                     )}
@@ -128,16 +129,16 @@ export default function EvidencePage() {
                     )}
                   </div>
                 )}
-                {ev.kind === 'image' && ev.mediaUrl && (
+                {ev.kind === 'image' && resolvedUrl && (
                   <div className="evidence-image">
-                    <a href={ev.mediaUrl} target="_blank" rel="noreferrer" title="Abrir imagen original">
+                    <a href={resolvedUrl} target="_blank" rel="noreferrer" title="Abrir imagen original">
                       <img 
-                        src={ev.mediaUrl} 
+                        src={resolvedUrl} 
                         alt={ev.description || 'evidencia'} 
                         loading="lazy" 
                         onError={(e) => {
                           e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiMyZDI5M2IiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk0YTNiOCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiPueUqOaBrOaIkeaUqOingeWkpuaIkTwvdGV4dD48L3N2Zz4=';
-                          e.currentTarget.alt = 'Imagen no disponible (URL expirada)';
+                          e.currentTarget.alt = 'Imagen no disponible';
                           e.currentTarget.style.filter = 'grayscale(100%)';
                         }}
                       />
@@ -147,8 +148,8 @@ export default function EvidencePage() {
                 {ev.description && ev.kind !== 'audio' && (
                   <p className="evidence-desc">{ev.description}</p>
                 )}
-                {ev.kind === 'document' && ev.mediaUrl && (
-                  <a className="evidence-doc" href={ev.mediaUrl} target="_blank" rel="noreferrer">
+                {ev.kind === 'document' && resolvedUrl && (
+                  <a className="evidence-doc" href={resolvedUrl} target="_blank" rel="noreferrer">
                     <FileText size={14} /> Ver documento <ExternalLink size={12} />
                   </a>
                 )}

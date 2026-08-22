@@ -16,16 +16,37 @@ import path from "path";
 import crypto from "crypto";
 import { dbService } from "./database";
 
-// Descargamos el media localmente para evitar que la URL firmada de Evolution API
-// expire y se pierda la evidencia en el panel. Se guarda en un volumen persistente.
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "/data/uploads/media";
+// Directorio de almacenamiento de multimedia (imágenes, audios, documentos)
+function getResolvedUploadDir(): string {
+  const dirs = [
+    process.env.UPLOAD_DIR,
+    path.join(process.cwd(), "public", "uploads", "media"),
+    path.join(process.cwd(), "uploads", "media"),
+    "/data/uploads/media"
+  ].filter(Boolean) as string[];
 
-function ensureUploadDir() {
+  for (const dir of dirs) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      return dir;
+    } catch {
+      // Intentar el siguiente directorio
+    }
+  }
+  const fallback = path.join(process.cwd(), "uploads");
+  try { fs.mkdirSync(fallback, { recursive: true }); } catch { /* ignore */ }
+  return fallback;
+}
+
+const UPLOAD_DIR = getResolvedUploadDir();
+
+function ensureUploadDir(): string {
   try {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  } catch (e) {
-    console.warn("[ensureUploadDir] no se pudo crear:", (e as Error).message);
+  } catch {
+    /* ignore */
   }
+  return UPLOAD_DIR;
 }
 
 function extFromUrl(url: string, contentType?: string): string {
@@ -39,36 +60,67 @@ function extFromUrl(url: string, contentType?: string): string {
   return m ? m[1].toLowerCase() : "bin";
 }
 
-// Devuelve la ruta local servible (/api/media/<file>) o null si falla.
-async function downloadAndStoreMedia(url: string, kind: string): Promise<string | null> {
-  if (!url || !/^https?:\/\//i.test(url)) return null;
-  try {
-    console.log(`[media] Descargando ${kind}: ${url.substring(0, 100)}...`);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000); // 15s timeout
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (!res.ok) {
-      console.warn(`[media] HTTP ${res.status} al descargar ${kind} de ${url.substring(0, 80)}`);
+// Devuelve la ruta local servible (/api/media/<file>) o la URL original si ya es servible
+async function downloadAndStoreMedia(mediaInput: string, kind: string): Promise<string | null> {
+  if (!mediaInput) return null;
+
+  // Si ya es una ruta local de nuestra API (/api/media/...)
+  if (mediaInput.startsWith("/api/media/")) return mediaInput;
+
+  ensureUploadDir();
+
+  // Caso 1: Data URL o Base64 directo
+  if (mediaInput.startsWith("data:") || (!mediaInput.startsWith("http") && mediaInput.length > 100)) {
+    try {
+      let ext = kind === "audio" ? "ogg" : kind === "image" ? "jpg" : "pdf";
+      let base64Data = mediaInput;
+      if (mediaInput.startsWith("data:")) {
+        const match = mediaInput.match(/^data:([^;]+);base64,(.*)$/);
+        if (match) {
+          ext = extFromUrl("", match[1]) || ext;
+          base64Data = match[2];
+        }
+      }
+      const buf = Buffer.from(base64Data, "base64");
+      if (buf.length === 0) return null;
+      const filename = `${crypto.randomUUID()}.${ext}`;
+      fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
+      console.log(`[media] Base64 guardado OK: /api/media/${filename} (${(buf.length / 1024).toFixed(1)} KB)`);
+      return `/api/media/${filename}`;
+    } catch (e) {
+      console.warn(`[media] Error guardando Base64 ${kind}:`, (e as Error).message);
       return null;
     }
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length === 0) {
-      console.warn(`[media] Archivo vacío para ${kind} de ${url.substring(0, 80)}`);
-      return null;
-    }
-    const contentType = res.headers.get("content-type") || "";
-    const ext = extFromUrl(url, contentType) || (kind === "audio" ? "ogg" : "jpg");
-    ensureUploadDir();
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
-    const localPath = `/api/media/${filename}`;
-    console.log(`[media] Guardado OK: ${localPath} (${(buf.length / 1024).toFixed(1)} KB, ${contentType})`);
-    return localPath;
-  } catch (e) {
-    console.warn(`[media] Error descargando ${kind}: ${(e as Error).message} | URL: ${url.substring(0, 80)}`);
-    return null;
   }
+
+  // Caso 2: URL HTTP / HTTPS
+  if (/^https?:\/\//i.test(mediaInput)) {
+    try {
+      console.log(`[media] Descargando ${kind}: ${mediaInput.substring(0, 80)}...`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      const res = await fetch(mediaInput, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        console.warn(`[media] HTTP ${res.status} al descargar ${kind}`);
+        return mediaInput; // Mantener URL externa si no se pudo descargar
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0) return mediaInput;
+      const contentType = res.headers.get("content-type") || "";
+      const ext = extFromUrl(mediaInput, contentType) || (kind === "audio" ? "ogg" : kind === "image" ? "jpg" : "pdf");
+      const filename = `${crypto.randomUUID()}.${ext}`;
+      fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
+      const localPath = `/api/media/${filename}`;
+      console.log(`[media] Guardado OK: ${localPath} (${(buf.length / 1024).toFixed(1)} KB, ${contentType})`);
+      return localPath;
+    } catch (e) {
+      console.warn(`[media] Error descargando ${kind}: ${(e as Error).message}`);
+      return mediaInput;
+    }
+  }
+
+  return null;
 }
 import {
   interpretDriverMessageWithAI,
@@ -268,6 +320,75 @@ function ignoredResult(payload: WhatsappIncomingPayload, reason: string): Whatsa
   };
 }
 
+function extractMediaAndDetailsFromPayload(payload: WhatsappIncomingPayload): {
+  resolvedType: "text" | "audio" | "image" | "document" | "location";
+  resolvedMediaUrl?: string;
+  resolvedMessage: string;
+  resolvedLat?: number;
+  resolvedLng?: number;
+  resolvedPushName?: string;
+} {
+  let resolvedType = payload.messageType || "text";
+  let resolvedMediaUrl = payload.mediaUrl;
+  let resolvedMessage = payload.message || "";
+  let resolvedLat = payload.latitude;
+  let resolvedLng = payload.longitude;
+  let resolvedPushName = payload.pushName;
+
+  if (payload.rawPayload) {
+    try {
+      const obj = typeof payload.rawPayload === "string" ? JSON.parse(payload.rawPayload) : payload.rawPayload;
+      const data = obj.data || obj;
+      const msg = data.message || {};
+
+      if (!resolvedPushName && data.pushName) resolvedPushName = data.pushName;
+
+      // Detectar imagen
+      if (msg.imageMessage) {
+        resolvedType = "image";
+        if (!resolvedMediaUrl) resolvedMediaUrl = msg.imageMessage.url || data.mediaUrl || msg.base64 || data.base64;
+        if (!resolvedMessage && msg.imageMessage.caption) resolvedMessage = msg.imageMessage.caption;
+      }
+      // Detectar audio
+      else if (msg.audioMessage) {
+        resolvedType = "audio";
+        if (!resolvedMediaUrl) resolvedMediaUrl = msg.audioMessage.url || data.mediaUrl || msg.base64 || data.base64;
+      }
+      // Detectar documento
+      else if (msg.documentMessage) {
+        resolvedType = "document";
+        if (!resolvedMediaUrl) resolvedMediaUrl = msg.documentMessage.url || data.mediaUrl || msg.base64 || data.base64;
+        if (!resolvedMessage) resolvedMessage = msg.documentMessage.caption || msg.documentMessage.fileName || "";
+      }
+      // Detectar ubicación
+      else if (msg.locationMessage) {
+        resolvedType = "location";
+        if (resolvedLat === undefined) resolvedLat = msg.locationMessage.degreesLatitude;
+        if (resolvedLng === undefined) resolvedLng = msg.locationMessage.degreesLongitude;
+      }
+
+      // Propiedades de Evolution API v2 en raíz
+      if (!resolvedMediaUrl && (data.mediaUrl || data.url)) {
+        resolvedMediaUrl = data.mediaUrl || data.url;
+      }
+      if (!resolvedMediaUrl && (data.base64 || msg.base64)) {
+        resolvedMediaUrl = data.base64 || msg.base64;
+      }
+    } catch {
+      /* ignore JSON parse error */
+    }
+  }
+
+  return {
+    resolvedType: resolvedType as any,
+    resolvedMediaUrl,
+    resolvedMessage,
+    resolvedLat,
+    resolvedLng,
+    resolvedPushName
+  };
+}
+
 // =====================================================
 // PROCESO PRINCIPAL
 // =====================================================
@@ -341,16 +462,31 @@ export async function processIncomingWhatsappMessage(
     return ignoredResult(payload, `Debounce anti-loop: respuesta reciente para ${cleanPhone}.`);
   }
 
+  // Extraer datos multimedia o campos enriquecidos desde rawPayload si están disponibles
+  const rawDetails = extractMediaAndDetailsFromPayload(payload);
+  const effectiveMessageType = rawDetails.resolvedType;
+  let effectiveMediaUrl = rawDetails.resolvedMediaUrl;
+  let effectiveMessage = rawDetails.resolvedMessage || rawText;
+  const effectiveLat = rawDetails.resolvedLat !== undefined ? rawDetails.resolvedLat : payload.latitude;
+  const effectiveLng = rawDetails.resolvedLng !== undefined ? rawDetails.resolvedLng : payload.longitude;
+
   // 1. Identificar chofer y viaje activo
   const driver = dbService.findDriverByPhone(cleanPhone);
   const resolvedCompanyId = driver?.companyId || companyId;
   const activeTrip = driver ? dbService.getActiveTrip(driver.id) : null;
 
-  // 2. Si es audio y NO viene transcripto, lo transcribimos nosotros (Whisper)
-  let transcript = rawText;
-  if (payload.messageType === "audio" && (!transcript || transcript.trim().length < 2) && payload.mediaUrl) {
+  // Guardar/Descargar media localmente si existe
+  if (effectiveMediaUrl) {
+    const local = await downloadAndStoreMedia(effectiveMediaUrl, effectiveMessageType);
+    if (local) effectiveMediaUrl = local;
+  }
+
+  // 2. Si es audio y NO viene transcripto, lo transcribimos con Whisper
+  let transcript = effectiveMessage;
+  if (effectiveMessageType === "audio" && (!transcript || transcript.trim().length < 2) && effectiveMediaUrl) {
     try {
-      transcript = await transcribeAudio(payload.mediaUrl, "audio/ogg");
+      transcript = await transcribeAudio(effectiveMediaUrl, "audio/ogg");
+      console.log(`[whisper] Audio transcripto con éxito para ${cleanPhone}: "${transcript}"`);
     } catch (e) {
       console.warn("[transcribeAudio] falló:", (e as Error).message);
     }
@@ -360,12 +496,14 @@ export async function processIncomingWhatsappMessage(
   let aiResult: InterpretResult | null = null;
   let interpretation: MessageInterpretation | null = null;
 
-  if (transcript && payload.messageType !== "location") {
-    try {
-      aiResult = await interpretDriverMessageWithAI(transcript, driver, activeTrip);
-    } catch (e) {
-      console.warn("AI interpretation failed:", (e as Error).message);
-    }
+  try {
+    aiResult = await interpretDriverMessageWithAI(transcript, driver, activeTrip, {
+      messageType: effectiveMessageType,
+      mediaUrl: effectiveMediaUrl,
+      caption: effectiveMessage
+    });
+  } catch (e) {
+    console.warn("AI interpretation failed:", (e as Error).message);
   }
 
   // Si la IA devolvió interpretación, la usamos como fuente principal.
@@ -373,9 +511,9 @@ export async function processIncomingWhatsappMessage(
   // para que la cadena (evento → alerta) siga funcionando aunque la IA esté caída.
   const usingAI = !!aiResult?.interpretation;
   if (usingAI) {
-    interpretation = aiToMessageInterpretation(aiResult!.interpretation!, payload, driver, activeTrip);
+    interpretation = aiToMessageInterpretation(aiResult!.interpretation!, { ...payload, messageType: effectiveMessageType, latitude: effectiveLat, longitude: effectiveLng }, driver, activeTrip);
   } else {
-    interpretation = interpretDriverMessage(transcript, payload, driver, activeTrip);
+    interpretation = interpretDriverMessage(transcript, { ...payload, messageType: effectiveMessageType, latitude: effectiveLat, longitude: effectiveLng }, driver, activeTrip);
   }
 
   // Garantía: si por alguna razón quedó null (no debería), devolvemos unknown
@@ -399,8 +537,6 @@ export async function processIncomingWhatsappMessage(
   // 4. Aplicar efectos — Respetar niveles 1 (auto) y 2 (requieren aprobación)
   // `ai` siempre existe: o viene de la IA, o es un shape mínimo del parser determinístico.
 
-  // (companyId ya está definido arriba; usamos el driver-resuelto)
-
   // A. Actualización de estado del viaje (Nivel 1: aplicar si no requiere aprobación)
   if (interpretation.tripUpdate && (!ai || !ai.tripUpdate?.approvalRequired)) {
     try {
@@ -420,7 +556,7 @@ export async function processIncomingWhatsappMessage(
         driverId: driver.id,
         type: interpretation.incident.type,
         description: interpretation.incident.description,
-        location: payload.latitude ? `${payload.latitude}, ${payload.longitude}` : undefined
+        location: effectiveLat ? `${effectiveLat}, ${effectiveLng}` : undefined
       });
       incidentCreated = true;
     } catch (err) {
@@ -429,20 +565,20 @@ export async function processIncomingWhatsappMessage(
   }
 
   // C. GPS / ubicación
-  if (payload.messageType === "location" && payload.latitude !== undefined && payload.longitude !== undefined) {
+  if (effectiveMessageType === "location" && effectiveLat !== undefined && effectiveLng !== undefined) {
     try {
       if (activeTrip) {
-        dbService.createGpsPosition(activeTrip.id, payload.latitude, payload.longitude, 0);
+        dbService.createGpsPosition(activeTrip.id, effectiveLat, effectiveLng, 0);
       }
       dbService.createDriverLocation({
         companyId: resolvedCompanyId,
         driverId: driver?.id,
         tripId: activeTrip?.id,
         vehicleId: driver?.vehicleId,
-        latitude: payload.latitude,
-        longitude: payload.longitude,
+        latitude: effectiveLat,
+        longitude: effectiveLng,
         source: "whatsapp",
-        label: payload.message
+        label: effectiveMessage
       });
     } catch (err) {
       console.error("Error al guardar location:", err);
@@ -450,32 +586,27 @@ export async function processIncomingWhatsappMessage(
   }
 
   // D. Evidencia (audio, imagen, documento) -> trip_evidence
-  if ((payload.messageType === "image" || payload.messageType === "audio" || payload.messageType === "document") && (payload.mediaUrl || transcript)) {
-    console.log(`[evidence] Procesando ${payload.messageType} | mediaUrl=${payload.mediaUrl ? "SI" : "NO"} | phone=${cleanPhone}`);
+  if (effectiveMessageType === "image" || effectiveMessageType === "audio" || effectiveMessageType === "document" || effectiveMediaUrl) {
+    console.log(`[evidence] Procesando ${effectiveMessageType} | mediaUrl=${effectiveMediaUrl ? "SI" : "NO"} | phone=${cleanPhone}`);
     try {
       const kind: "audio" | "image" | "document" =
-        payload.messageType === "audio" ? "audio" :
-        payload.messageType === "image" ? "image" : "document";
-      // Descargar media localmente para evitar URL expirada de Evolution API
-      let storedMediaUrl = payload.mediaUrl;
-      if (payload.mediaUrl && /^https?:\/\//i.test(payload.mediaUrl)) {
-        const local = await downloadAndStoreMedia(payload.mediaUrl, kind);
-        if (local) storedMediaUrl = local;
-      }
+        effectiveMessageType === "audio" ? "audio" :
+        effectiveMessageType === "image" ? "image" : "document";
+
       dbService.createTripEvidence({
         companyId: resolvedCompanyId,
         tripId: activeTrip?.id,
         driverId: driver?.id,
         kind,
-        title: payload.pushName || undefined,
-        description: transcript || payload.message || undefined,
-        mediaUrl: storedMediaUrl,
+        title: rawDetails.resolvedPushName || payload.pushName || undefined,
+        description: transcript || effectiveMessage || undefined,
+        mediaUrl: effectiveMediaUrl,
         transcript: kind === "audio" ? transcript : undefined,
         source: "whatsapp",
         capturedAt: payload.timestamp
       });
       evidenceCreated = true;
-      console.log(`[evidence] Guardada OK: kind=${kind} storedUrl=${storedMediaUrl || "none"}`);
+      console.log(`[evidence] Guardada OK: kind=${kind} storedUrl=${effectiveMediaUrl || "none"}`);
     } catch (err) {
       console.error("[evidence] Error al guardar evidencia:", err);
     }

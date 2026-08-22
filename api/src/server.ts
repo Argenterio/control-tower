@@ -52,12 +52,21 @@ app.use(express.static("public"));
 
 // Servir media descargado localmente (evidencia de WhatsApp: imágenes, audios, documentos)
 // Las URLs firmadas de Evolution API expiran, por eso el backend las descarga y las sirve desde acá.
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "/data/uploads/media";
+const MEDIA_DIRS = [
+  process.env.UPLOAD_DIR,
+  path.join(process.cwd(), "public", "uploads", "media"),
+  path.join(process.cwd(), "uploads", "media"),
+  path.join(process.cwd(), "uploads"),
+  "/data/uploads/media"
+].filter(Boolean) as string[];
+
 const MEDIA_CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
   ".gif": "image/gif", ".ogg": "audio/ogg", ".mp3": "audio/mpeg", ".m4a": "audio/mp4",
-  ".amr": "audio/amr", ".wav": "audio/wav", ".pdf": "application/pdf", ".zip": "application/zip"
+  ".amr": "audio/amr", ".wav": "audio/wav", ".pdf": "application/pdf", ".zip": "application/zip",
+  ".svg": "image/svg+xml"
 };
+
 app.get("/api/media/:file", (req: express.Request, res: express.Response) => {
   const file = req.params.file || "";
   // Prevenir path traversal
@@ -65,15 +74,26 @@ app.get("/api/media/:file", (req: express.Request, res: express.Response) => {
     res.status(400).json({ error: "Nombre de archivo inválido" });
     return;
   }
-  const filePath = path.join(UPLOAD_DIR, file);
-  if (!fs.existsSync(filePath)) {
+
+  let foundPath: string | null = null;
+  for (const dir of MEDIA_DIRS) {
+    const candidate = path.join(dir, file);
+    if (fs.existsSync(candidate)) {
+      foundPath = candidate;
+      break;
+    }
+  }
+
+  if (!foundPath) {
     res.status(404).json({ error: "Media no encontrado" });
     return;
   }
+
   const ext = path.extname(file).toLowerCase();
   res.setHeader("Content-Type", MEDIA_CONTENT_TYPES[ext] || "application/octet-stream");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-  fs.createReadStream(filePath).pipe(res);
+  fs.createReadStream(foundPath).pipe(res);
 });
 
 
@@ -661,16 +681,23 @@ app.post("/api/whatsapp/send", requireAuth, async (req: express.Request, res: ex
 // POST /api/whatsapp/simulate - Endpoint para simular mensaje de chofer desde el Frontend
 app.post("/api/whatsapp/simulate", requireAuth, async (req: express.Request, res: express.Response) => {
   try {
-    const { phone, message, messageType, latitude, longitude, companyId } = req.body;
+    const { phone, message, messageType, mediaUrl, latitude, longitude, companyId, pushName } = req.body;
     const payload: WhatsappIncomingPayload = {
       phone: phone || "+54 9 11 4455-1122",
       message: message || "Salí hacia Córdoba",
-      messageType: messageType || "text",
-      companyId: companyId || undefined,
+      messageType: messageType || (mediaUrl ? "image" : "text"),
+      mediaUrl: mediaUrl || undefined,
+      pushName: pushName || undefined,
+      companyId: companyId || (res.locals.auth?.companyId) || undefined,
       latitude,
       longitude,
       timestamp: new Date().toISOString(),
-      rawPayload: JSON.stringify({ simulated: true, timestamp: new Date().toISOString() })
+      rawPayload: JSON.stringify({
+        simulated: true,
+        mediaUrl: mediaUrl || undefined,
+        messageType: messageType || undefined,
+        timestamp: new Date().toISOString()
+      })
     };
 
     const result = await processIncomingWhatsappMessage(payload);

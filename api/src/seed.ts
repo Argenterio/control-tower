@@ -196,6 +196,184 @@ export function seedDemoData() {
     `).run(f.id, companyId, f.vehicleId, f.driverId, f.station, f.liters, f.pricePerLiter, f.totalAmount, f.kmAtFill, f.consumption, f.anomaly, f.date);
   }
 
+  // 10. Evidencias Multimedia de Viajes (Fotos, Remitos, Audios, Ubicaciones)
+  const tripEvidence = [
+    {
+      id: "ev-01",
+      tripId: "trip-482",
+      driverId: "drv-01",
+      kind: "image",
+      title: "Remito de Entrega Firmado",
+      description: "Remito de descarga en planta Arcor Arroyito firmado por recepción y control de calidad.",
+      mediaUrl: "https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=800&auto=format&fit=crop&q=80",
+      transcript: null,
+      source: "whatsapp"
+    },
+    {
+      id: "ev-02",
+      tripId: "trip-482",
+      driverId: "drv-01",
+      kind: "image",
+      title: "Foto de Corte RN9 (Baradero)",
+      description: "Corte de tránsito total mano a Rosario en RN9 km 140 por obras y accidente previo.",
+      mediaUrl: "https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=800&auto=format&fit=crop&q=80",
+      transcript: null,
+      source: "whatsapp"
+    },
+    {
+      id: "ev-03",
+      tripId: "trip-483",
+      driverId: "drv-02",
+      kind: "audio",
+      title: "Nota de Voz: Arribo a Bodega",
+      description: "Audio del chofer Martín Benítez confirmando ingreso a planta y solicitud de turno de descarga.",
+      mediaUrl: "https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg",
+      transcript: "Hola central, Martín Benítez reportando. Ya ingresé a la bodega en Mendoza, me asignaron darsena 4 para la descarga.",
+      source: "whatsapp"
+    },
+    {
+      id: "ev-04",
+      tripId: "trip-484",
+      driverId: "drv-04",
+      kind: "image",
+      title: "Ticket de Carga de Combustible YPF",
+      description: "Ticket de carga 450 Litros Infinia Diesel en estación YPF Directo San Nicolás.",
+      mediaUrl: "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800&auto=format&fit=crop&q=80",
+      transcript: null,
+      source: "whatsapp"
+    },
+    {
+      id: "ev-05",
+      tripId: "trip-485",
+      driverId: "drv-05",
+      kind: "location",
+      title: "Ubicación en Tiempo Real RN9",
+      description: "Punto de telemetría reportado por WhatsApp al ingresar a circunvalación Rosario.",
+      mediaUrl: null,
+      transcript: "Compartió ubicación en vivo: -32.9468, -60.6393",
+      source: "whatsapp",
+      metadata: JSON.stringify({ latitude: -32.9468, longitude: -60.6393 })
+    },
+    {
+      id: "ev-06",
+      tripId: "trip-486",
+      driverId: "drv-06",
+      kind: "audio",
+      title: "Nota de Voz: Parada Técnica",
+      description: "Reporte de descanso reglamentario de 45 minutos en parador de autopista.",
+      mediaUrl: "https://actions.google.com/sounds/v1/ambiences/office_room.ogg",
+      transcript: "Buenas tardes equipo, paro 45 minutos a almorzar y revisar las cubiertas en el parador de Junín.",
+      source: "whatsapp"
+    }
+  ];
+
+  for (const ev of tripEvidence) {
+    rawDb.prepare(`
+      INSERT OR REPLACE INTO trip_evidence (id, companyId, tripId, driverId, kind, title, description, mediaUrl, transcript, source, metadata, capturedAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-1 hours'), datetime('now'))
+    `).run(ev.id, companyId, ev.tripId, ev.driverId, ev.kind, ev.title, ev.description, ev.mediaUrl, ev.transcript, ev.source, (ev as any).metadata || null);
+  }
+
+  // 11. Mensajes de WhatsApp y Auditoría
+  const whatsappMessages = [
+    {
+      id: "msg-01",
+      phone: "5491144551122",
+      driverId: "drv-01",
+      direction: "incoming",
+      messageType: "image",
+      content: "Acá mando el remito firmado de Arcor",
+      mediaUrl: "https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=800&auto=format&fit=crop&q=80",
+      interpretedAction: "document_upload",
+      interpretedConfidence: 0.98,
+      tripId: "trip-482",
+      responseMessage: "📄 Foto de remito recibida y guardada como evidencia en el Viaje #482 (Arcor)."
+    },
+    {
+      id: "msg-02",
+      phone: "5493415563344",
+      driverId: "drv-02",
+      direction: "incoming",
+      messageType: "audio",
+      content: "Hola central, Martín Benítez reportando. Ya ingresé a la bodega en Mendoza.",
+      mediaUrl: "https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg",
+      interpretedAction: "trip_arrival",
+      interpretedConfidence: 0.95,
+      tripId: "trip-483",
+      responseMessage: "🏁 Llegada registrada en Mendoza (Bodegas). El viaje #483 pasó a estado EN DESTINO."
+    },
+    {
+      id: "msg-03",
+      phone: "5491167890011",
+      driverId: "drv-04",
+      direction: "incoming",
+      messageType: "text",
+      content: "Salí hacia Bahía Blanca con la carga de acero",
+      mediaUrl: null,
+      interpretedAction: "trip_departure",
+      interpretedConfidence: 0.99,
+      tripId: "trip-484",
+      responseMessage: "✅ Salida confirmada. Viaje #484 actualizado a EN RUTA. ¡Buen viaje!"
+    }
+  ];
+
+  for (const wm of whatsappMessages) {
+    rawDb.prepare(`
+      INSERT OR REPLACE INTO whatsapp_messages (id, companyId, driverId, phone, direction, messageType, content, mediaUrl, interpretedAction, interpretedConfidence, tripId, processed, processedAt, responseMessage, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), ?, datetime('now', '-30 minutes'))
+    `).run(wm.id, companyId, wm.driverId, wm.phone, wm.direction, wm.messageType, wm.content, wm.mediaUrl, wm.interpretedAction, wm.interpretedConfidence, wm.tripId, wm.responseMessage);
+  }
+
+  // 12. Alertas Operativas Priorizadas
+  const alerts = [
+    {
+      id: "alt-01",
+      level: "critica",
+      title: "Viaje #482 con Demora (+1h 45m)",
+      message: "Corte total en RN9 km 140 (Baradero). Ventana de entrega comprometida con cliente Arcor Arroyito.",
+      entityType: "trip",
+      entityLabel: "Viaje #482",
+      tripId: "trip-482",
+      driverId: "drv-01",
+      vehicleId: "veh-01",
+      status: "open",
+      requiresIntervention: 1
+    },
+    {
+      id: "alt-02",
+      level: "alta",
+      title: "Consumo Anormal de Combustible (+22%)",
+      message: "La unidad Iveco Stralis registró 42.1 L/100km en el tramo Rosario-Córdoba.",
+      entityType: "vehicle",
+      entityLabel: "AG 105 OP",
+      tripId: null,
+      driverId: "drv-03",
+      vehicleId: "veh-03",
+      status: "open",
+      requiresIntervention: 1
+    },
+    {
+      id: "alt-03",
+      level: "alta",
+      title: "Póliza de Seguro Automotor Vencida",
+      message: "Póliza POL-CHUBB-9921 venció el 12/08/2026. Se recomienda inmovilizar la unidad hasta renovación.",
+      entityType: "vehicle",
+      entityLabel: "AG 105 OP",
+      tripId: null,
+      driverId: null,
+      vehicleId: "veh-03",
+      status: "open",
+      requiresIntervention: 1
+    }
+  ];
+
+  for (const a of alerts) {
+    rawDb.prepare(`
+      INSERT OR REPLACE INTO operational_alerts (id, companyId, level, title, message, entityType, entityLabel, tripId, driverId, vehicleId, status, requiresIntervention, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-2 hours'), datetime('now'))
+    `).run(a.id, companyId, a.level, a.title, a.message, a.entityType, a.entityLabel, a.tripId, a.driverId, a.vehicleId, a.status, a.requiresIntervention);
+  }
+
   console.log("🏁 Carga de datos demo completada con éxito. Listo para demostración a transportistas.");
 }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Settings, Building, Phone, Radio, Save, Check, ExternalLink, Send, Bot, MessageSquare } from 'lucide-react';
-import api from '../api';
+import { Settings, Building, Phone, Radio, Save, Check, ExternalLink, Send, Bot, MessageSquare, Image, Mic, MapPin, AlertTriangle } from 'lucide-react';
+import api, { resolveMediaUrl } from '../api/client';
 
 export function SettingsPage() {
   const [saved, setSaved] = useState(false);
@@ -16,6 +16,8 @@ export function SettingsPage() {
   // Simulador interactivo de WhatsApp
   const [simDriverPhone, setSimDriverPhone] = useState('+54 9 11 4455-1122'); // Carlos Rodríguez
   const [simMessage, setSimMessage] = useState('Salí hacia Córdoba');
+  const [simMessageType, setSimMessageType] = useState<'text' | 'image' | 'audio' | 'location'>('text');
+  const [simMediaUrl, setSimMediaUrl] = useState<string>('');
   const [simLoading, setSimLoading] = useState(false);
   const [simResponse, setSimResponse] = useState<any>(null);
 
@@ -25,18 +27,23 @@ export function SettingsPage() {
     setTimeout(() => setSaved(false), 3000);
   };
 
-  const handleSimulate = async (customMsg?: string) => {
-    const textToSend = customMsg || simMessage;
-    if (!textToSend) return;
+  const handleSimulate = async (opts?: { message?: string; messageType?: string; mediaUrl?: string; latitude?: number; longitude?: number }) => {
+    const textToSend = opts?.message !== undefined ? opts.message : simMessage;
+    const typeToSend = opts?.messageType || simMessageType;
+    const mediaToSend = opts?.mediaUrl !== undefined ? opts.mediaUrl : simMediaUrl;
+
     setSimLoading(true);
     setSimResponse(null);
     try {
-      const res = await api.post<any>('/api/whatsapp/simulate', {
+      const res = await api.simulateWhatsappMessage('default-company', {
         phone: simDriverPhone,
         message: textToSend,
-        messageType: 'text'
+        messageType: typeToSend,
+        mediaUrl: mediaToSend || undefined,
+        latitude: opts?.latitude,
+        longitude: opts?.longitude
       });
-      setSimResponse(res.data);
+      setSimResponse(res);
     } catch (err: any) {
       setSimResponse({
         error: err.message || 'Error al comunicarse con la API de WhatsApp'
@@ -55,7 +62,7 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, maxWidth: 920 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, maxWidth: 960 }}>
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {/* Company Profile */}
           <div className="chart-card">
@@ -187,14 +194,141 @@ export function SettingsPage() {
           </div>
         </form>
 
-        {/* Simulador Interactivo de WhatsApp para Demostración */}
-        <div className="chart-card" style={{ border: '1px solid rgba(52, 211, 153, 0.4)', background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(6, 78, 59, 0.15) 100%)' }}>
+        {/* Simulador Interactivo Multimodal de WhatsApp */}
+        <div className="chart-card" style={{ border: '1px solid rgba(52, 211, 153, 0.4)', background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(6, 78, 59, 0.2) 100%)' }}>
           <div className="chart-header">
-            <h3><Bot size={18} color="#34d399" /> Consola de Simulación WhatsApp en Vivo (Demo)</h3>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>Prueba el procesamiento en tiempo real sin necesidad de enviar desde tu móvil</span>
+            <h3><Bot size={20} color="#34d399" /> Consola de Simulación WhatsApp en Vivo (Multimodal)</h3>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>Prueba mensajes de texto, fotos de remitos, audios y reportes de averías en tiempo real</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 16 }}>
+          {/* Botones Rápidos por Categoría */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#38bdf8', marginBottom: 8 }}>
+              ⚡ Pruebas Rápidas con IA y Multimedia (1-Click):
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start', background: 'rgba(30, 41, 59, 0.8)' }}
+                onClick={() => {
+                  setSimMessage('Salí hacia Córdoba con carga completa');
+                  setSimMessageType('text');
+                  setSimMediaUrl('');
+                  handleSimulate({ message: 'Salí hacia Córdoba con carga completa', messageType: 'text' });
+                }}
+              >
+                🚀 <strong>Salida a Ruta</strong> (Texto)
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start', background: 'rgba(30, 41, 59, 0.8)' }}
+                onClick={() => {
+                  setSimMessage('Acabo de llegar a la planta de Arcor Arroyito');
+                  setSimMessageType('text');
+                  setSimMediaUrl('');
+                  handleSimulate({ message: 'Acabo de llegar a la planta de Arcor Arroyito', messageType: 'text' });
+                }}
+              >
+                🏁 <strong>Llegada a Destino</strong> (Texto)
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start', background: 'rgba(30, 41, 59, 0.8)' }}
+                onClick={() => {
+                  setSimMessage('Tengo demora de 1h 30m por corte en RN9 km 140 Baradero');
+                  setSimMessageType('text');
+                  setSimMediaUrl('');
+                  handleSimulate({ message: 'Tengo demora de 1h 30m por corte en RN9 km 140 Baradero', messageType: 'text' });
+                }}
+              >
+                ⏳ <strong>Demora Operativa</strong> (Alerta)
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start', borderColor: 'rgba(56, 189, 248, 0.4)', background: 'rgba(14, 116, 144, 0.2)' }}
+                onClick={() => {
+                  const imgUrl = 'https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=800&auto=format&fit=crop&q=80';
+                  setSimMessage('Adjunto foto del remito firmado con sello de recepción');
+                  setSimMessageType('image');
+                  setSimMediaUrl(imgUrl);
+                  handleSimulate({
+                    message: 'Adjunto foto del remito firmado con sello de recepción',
+                    messageType: 'image',
+                    mediaUrl: imgUrl
+                  });
+                }}
+              >
+                <Image size={14} color="#38bdf8" /> <strong>Remito Firmado</strong> (Foto)
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start', borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(153, 27, 27, 0.2)' }}
+                onClick={() => {
+                  const imgUrl = 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=800&auto=format&fit=crop&q=80';
+                  setSimMessage('Se pinchó la cubierta delantera derecha en RN9, estoy en banquina');
+                  setSimMessageType('image');
+                  setSimMediaUrl(imgUrl);
+                  handleSimulate({
+                    message: 'Se pinchó la cubierta delantera derecha en RN9, estoy en banquina',
+                    messageType: 'image',
+                    mediaUrl: imgUrl
+                  });
+                }}
+              >
+                <AlertTriangle size={14} color="#ef4444" /> <strong>Neumático / Avería</strong> (Foto + Alerta)
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start', borderColor: 'rgba(168, 85, 247, 0.4)', background: 'rgba(107, 33, 168, 0.2)' }}
+                onClick={() => {
+                  const audioUrl = 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg';
+                  setSimMessage('Hola central, Martín Benítez reportando. Ya ingresé a la bodega en Mendoza.');
+                  setSimMessageType('audio');
+                  setSimMediaUrl(audioUrl);
+                  handleSimulate({
+                    message: 'Hola central, Martín Benítez reportando. Ya ingresé a la bodega en Mendoza.',
+                    messageType: 'audio',
+                    mediaUrl: audioUrl
+                  });
+                }}
+              >
+                <Mic size={14} color="#c084fc" /> <strong>Nota de Voz Chofer</strong> (Audio)
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start', background: 'rgba(30, 41, 59, 0.8)' }}
+                onClick={() => {
+                  setSimMessage('Comparto mi ubicación GPS actual');
+                  setSimMessageType('location');
+                  setSimMediaUrl('');
+                  handleSimulate({
+                    message: 'Comparto mi ubicación GPS actual',
+                    messageType: 'location',
+                    latitude: -32.9468,
+                    longitude: -60.6393
+                  });
+                }}
+              >
+                <MapPin size={14} color="#34d399" /> <strong>Ubicación GPS</strong> (Coords)
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 16 }}>
+            {/* Formulario Personalizado */}
             <div>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label>Chofer Remitente</label>
@@ -210,7 +344,21 @@ export function SettingsPage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: 12 }}>
-                <label>Mensaje del Chofer</label>
+                <label>Tipo de Mensaje</label>
+                <select
+                  value={simMessageType}
+                  onChange={e => setSimMessageType(e.target.value as any)}
+                  style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '10px 12px', color: '#fff' }}
+                >
+                  <option value="text">Texto</option>
+                  <option value="image">Fotografía / Imagen</option>
+                  <option value="audio">Audio / Nota de Voz</option>
+                  <option value="location">Ubicación GPS</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label>Mensaje o Epígrafe del Chofer</label>
                 <input
                   type="text"
                   value={simMessage}
@@ -219,71 +367,86 @@ export function SettingsPage() {
                 />
               </div>
 
-              {/* Botones rápidos de prueba */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                {['Salí a ruta', 'Llegué a destino', 'Estoy cargando', 'Demora de 1h por congestión', 'Se rompió una manguera', '¿Qué viaje tengo?'].map(txt => (
-                  <button
-                    key={txt}
-                    type="button"
-                    onClick={() => { setSimMessage(txt); handleSimulate(txt); }}
-                    style={{
-                      fontSize: 11,
-                      padding: '4px 8px',
-                      background: 'rgba(51, 65, 85, 0.8)',
-                      border: '1px solid #475569',
-                      borderRadius: 6,
-                      color: '#cbd5e1',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {txt}
-                  </button>
-                ))}
-              </div>
+              {simMessageType !== 'text' && simMessageType !== 'location' && (
+                <div className="form-group" style={{ marginBottom: 12 }}>
+                  <label>URL o Archivo Multimedia (opcional)</label>
+                  <input
+                    type="text"
+                    value={simMediaUrl}
+                    onChange={e => setSimMediaUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+              )}
 
               <button
                 type="button"
                 onClick={() => handleSimulate()}
                 disabled={simLoading}
                 className="btn btn-primary"
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14 }}
               >
-                <Send size={16} /> {simLoading ? 'Procesando...' : 'Simular Envío WhatsApp'}
+                <Send size={16} /> {simLoading ? 'Procesando con IA...' : 'Simular Envío WhatsApp'}
               </button>
             </div>
 
-            {/* Visualización de la Respuesta del Bot */}
-            <div style={{ background: '#090d16', borderRadius: 8, padding: 14, border: '1px solid #1e293b', minHeight: 180, display: 'flex', flexDirection: 'column' }}>
+            {/* Visualización de la Respuesta del Bot e Impacto en Base de Datos */}
+            <div style={{ background: '#090d16', borderRadius: 8, padding: 14, border: '1px solid #1e293b', minHeight: 220, display: 'flex', flexDirection: 'column' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <MessageSquare size={14} color="#34d399" /> Respuesta Automática de Alex / Bot WhatsApp:
               </div>
 
               {simResponse ? (
                 simResponse.error ? (
-                  <div style={{ color: '#f87171', fontSize: 13 }}>⚠️ {simResponse.error}</div>
+                  <div style={{ color: '#f87171', fontSize: 13, padding: 12, background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8 }}>
+                    ⚠️ {simResponse.error}
+                  </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Mensaje de retorno al chofer */}
                     <div style={{
                       background: '#14532d',
                       color: '#dcfce7',
-                      padding: '10px 14px',
+                      padding: '12px 14px',
                       borderRadius: '12px 12px 12px 2px',
                       fontSize: 13,
                       lineHeight: 1.5,
-                      whiteSpace: 'pre-wrap'
+                      whiteSpace: 'pre-wrap',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
                     }}>
-                      {simResponse.responseMessage}
+                      {simResponse.responseMessage || simResponse.data?.interpretation?.responseMessage}
                     </div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                      • Acción detectada: <strong style={{ color: '#38bdf8' }}>{simResponse.data?.interpretation?.action}</strong> (Confianza: {Math.round((simResponse.data?.interpretation?.confidence || 0) * 100)}%)<br />
-                      • Viaje actualizado en base de datos: <strong style={{ color: simResponse.data?.tripUpdated ? '#4ade80' : '#94a3b8' }}>{simResponse.data?.tripUpdated ? 'SÍ' : 'NO'}</strong><br />
-                      • Incidente generado: <strong style={{ color: simResponse.data?.incidentCreated ? '#f87171' : '#94a3b8' }}>{simResponse.data?.incidentCreated ? 'SÍ' : 'NO'}</strong>
+
+                    {/* Previsualización del medio si hubo */}
+                    {simMediaUrl && (
+                      <div style={{ marginTop: 4, background: 'rgba(30, 41, 59, 0.5)', padding: 8, borderRadius: 8, border: '1px solid #334155' }}>
+                        {simMessageType === 'image' && (
+                          <img
+                            src={resolveMediaUrl(simMediaUrl)}
+                            alt="Vista previa"
+                            style={{ maxHeight: 120, borderRadius: 6, display: 'block', objectFit: 'cover' }}
+                          />
+                        )}
+                        {simMessageType === 'audio' && (
+                          <audio controls src={resolveMediaUrl(simMediaUrl)} style={{ width: '100%', height: 36 }}>
+                            Tu navegador no soporta audio.
+                          </audio>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Metadata interpretada */}
+                    <div style={{ fontSize: 12, color: '#94a3b8', background: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, lineHeight: 1.6 }}>
+                      • Acción clasificada: <strong style={{ color: '#38bdf8' }}>{simResponse.data?.interpretation?.action || 'general_message'}</strong> (Confianza: {Math.round((simResponse.data?.interpretation?.confidence || 0.9) * 100)}%)<br />
+                      • Viaje actualizado en tiempo real: <strong style={{ color: simResponse.data?.tripUpdated ? '#4ade80' : '#94a3b8' }}>{simResponse.data?.tripUpdated ? 'SÍ' : 'NO'}</strong><br />
+                      • Evidencia guardada en panel: <strong style={{ color: '#38bdf8' }}>{simMessageType !== 'text' ? 'SÍ' : 'NO'}</strong><br />
+                      • Incidente / Alerta generada: <strong style={{ color: simResponse.data?.incidentCreated ? '#f87171' : '#94a3b8' }}>{simResponse.data?.incidentCreated ? 'SÍ' : 'NO'}</strong>
                     </div>
                   </div>
                 )
               ) : (
-                <div style={{ color: '#475569', fontSize: 12, fontStyle: 'italic', margin: 'auto' }}>
-                  Elige un mensaje de prueba o escribe uno para ver la interpretación y respuesta automática en vivo.
+                <div style={{ color: '#64748b', fontSize: 13, fontStyle: 'italic', margin: 'auto', textAlign: 'center', padding: 20 }}>
+                  Selecciona una de las <strong>pruebas rápidas (1-Click)</strong> o escribe un mensaje personalizado para ver cómo la IA interpreta, responde y actualiza el panel en vivo.
                 </div>
               )}
             </div>
