@@ -146,7 +146,50 @@ export function interpretDriverMessage(
 export async function processIncomingWhatsappMessage(
   payload: WhatsappIncomingPayload
 ): Promise<WhatsappProcessResult> {
-  const cleanPhone = payload.phone || "";
+  // Ignorar mensajes propios del bot (fromMe = true o phone = número del bot)
+  // Evita loop infinito: el bot responde -> Evolution dispara webhook del mensaje saliente -> bot procesa y responde de nuevo
+  if (payload.fromMe === true) {
+    return {
+      messageId: "",
+      phone: payload.phone || "",
+      remoteJid: payload.remoteJid || "",
+      driverFound: false,
+      driverName: undefined,
+      companyId: payload.companyId || "default-company",
+      interpretation: {
+        action: "ignored",
+        confidence: 1,
+        responseMessage: "Mensaje propio del bot ignorado (fromMe=true)."
+      },
+      tripUpdated: false,
+      incidentCreated: false,
+      deduplicated: true
+    };
+  }
+
+  // También ignorar si el phone/remoteJid coincide con el número propio del bot (configurable vía env)
+  const BOT_PHONE = process.env.BOT_PHONE || "5491173719972";
+  const cleanPhone = (payload.phone || "").replace("@s.whatsapp.net", "").replace("@c.us", "");
+  const remotePhone = (payload.remoteJid || "").replace("@s.whatsapp.net", "").replace("@c.us", "");
+  if (cleanPhone === BOT_PHONE || remotePhone === BOT_PHONE) {
+    return {
+      messageId: "",
+      phone: payload.phone || "",
+      remoteJid: payload.remoteJid || "",
+      driverFound: false,
+      driverName: undefined,
+      companyId: payload.companyId || "default-company",
+      interpretation: {
+        action: "ignored",
+        confidence: 1,
+        responseMessage: `Mensaje del número del bot (${BOT_PHONE}) ignorado.`
+      },
+      tripUpdated: false,
+      incidentCreated: false,
+      deduplicated: true
+    };
+  }
+
   const rawText = payload.message || "";
   const companyId = payload.companyId || "default-company";
 
