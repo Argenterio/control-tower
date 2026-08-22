@@ -5,6 +5,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
 import { dbService, rawDb } from "./database";
 import type { DatabaseService } from "./database";
 import { signToken, requireAuth, requireRole, ensureAdminUser, verifyPassword, type AuthPayload } from "./auth";
@@ -47,6 +49,33 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
+
+// Servir media descargado localmente (evidencia de WhatsApp: imágenes, audios, documentos)
+// Las URLs firmadas de Evolution API expiran, por eso el backend las descarga y las sirve desde acá.
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "/data/uploads/media";
+const MEDIA_CONTENT_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+  ".gif": "image/gif", ".ogg": "audio/ogg", ".mp3": "audio/mpeg", ".m4a": "audio/mp4",
+  ".amr": "audio/amr", ".wav": "audio/wav", ".pdf": "application/pdf", ".zip": "application/zip"
+};
+app.get("/api/media/:file", (req: express.Request, res: express.Response) => {
+  const file = req.params.file || "";
+  // Prevenir path traversal
+  if (!/^[a-zA-Z0-9._-]+$/.test(file)) {
+    res.status(400).json({ error: "Nombre de archivo inválido" });
+    return;
+  }
+  const filePath = path.join(UPLOAD_DIR, file);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: "Media no encontrado" });
+    return;
+  }
+  const ext = path.extname(file).toLowerCase();
+  res.setHeader("Content-Type", MEDIA_CONTENT_TYPES[ext] || "application/octet-stream");
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  fs.createReadStream(filePath).pipe(res);
+});
+
 
 // Health check - returns typed response
 app.get("/health", (req: express.Request, res: express.Response) => {

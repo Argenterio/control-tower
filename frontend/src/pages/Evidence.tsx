@@ -114,9 +114,18 @@ export default function EvidencePage() {
                 <span className="evidence-date">{formatDate(ev.capturedAt || ev.createdAt)}</span>
               </div>
               <div className="evidence-body">
-                {ev.kind === 'audio' && ev.transcript && (
-                  <div className="evidence-transcript">
-                    <Volume2 size={14} /> <em>"{ev.transcript}"</em>
+                {ev.kind === 'audio' && (
+                  <div className="evidence-audio">
+                    {ev.mediaUrl && (
+                      <audio controls preload="metadata" src={ev.mediaUrl}>
+                        Tu navegador no soporta el elemento de audio.
+                      </audio>
+                    )}
+                    {ev.transcript && (
+                      <div className="evidence-transcript">
+                        <Volume2 size={14} /> <em>"{ev.transcript}"</em>
+                      </div>
+                    )}
                   </div>
                 )}
                 {ev.kind === 'image' && ev.mediaUrl && (

@@ -11,7 +11,53 @@
 //
 // Este archivo se mantiene retrocompatible: si la IA no está disponible, usa parser determinístico.
 
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
 import { dbService } from "./database";
+
+// Descargamos el media localmente para evitar que la URL firmada de Evolution API
+// expire y se pierda la evidencia en el panel. Se guarda en un volumen persistente.
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "/data/uploads/media";
+
+function ensureUploadDir() {
+  try {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  } catch (e) {
+    console.warn("[ensureUploadDir] no se pudo crear:", (e as Error).message);
+  }
+}
+
+function extFromUrl(url: string, contentType?: string): string {
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+    "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/amr": "amr", "audio/wav": "wav",
+    "application/pdf": "pdf", "application/zip": "zip"
+  };
+  if (contentType && map[contentType]) return map[contentType];
+  const m = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
+  return m ? m[1].toLowerCase() : "bin";
+}
+
+// Devuelve la ruta local servible (/api/media/<file>) o null si falla.
+async function downloadAndStoreMedia(url: string, kind: string): Promise<string | null> {
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0) return null;
+    const contentType = res.headers.get("content-type") || "";
+    const ext = extFromUrl(url, contentType) || (kind === "audio" ? "ogg" : "jpg");
+    ensureUploadDir();
+    const filename = `${crypto.randomUUID()}.${ext}`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), buf);
+    return `/api/media/${filename}`;
+  } catch (e) {
+    console.warn("[downloadAndStoreMedia] falló:", (e as Error).message);
+    return null;
+  }
+}
 import {
   interpretDriverMessageWithAI,
   transcribeAudio,
@@ -334,6 +380,12 @@ export async function processIncomingWhatsappMessage(
       const kind: "audio" | "image" | "document" =
         payload.messageType === "audio" ? "audio" :
         payload.messageType === "image" ? "image" : "document";
+      // Descargar media localmente para evitar URL expirada de Evolution API
+      let storedMediaUrl = payload.mediaUrl;
+      if (payload.mediaUrl && /^https?:\/\//i.test(payload.mediaUrl)) {
+        const local = await downloadAndStoreMedia(payload.mediaUrl, kind);
+        if (local) storedMediaUrl = local;
+      }
       dbService.createTripEvidence({
         companyId: resolvedCompanyId,
         tripId: activeTrip?.id,
@@ -341,7 +393,7 @@ export async function processIncomingWhatsappMessage(
         kind,
         title: payload.pushName || undefined,
         description: transcript || payload.message || undefined,
-        mediaUrl: payload.mediaUrl,
+        mediaUrl: storedMediaUrl,
         transcript: kind === "audio" ? transcript : undefined,
         source: "whatsapp",
         capturedAt: payload.timestamp
