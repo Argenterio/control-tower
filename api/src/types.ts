@@ -288,7 +288,8 @@ export type InterpretedAction =
   | "greeting"          // "Hola", "Buenos días"
   | "status_query"      // "¿Cómo va mi viaje?", "¿Qué viaje tengo?"
   | "general_message"   // Mensaje general sin acción específica
-  | "unknown";          // No se pudo interpretar
+  | "unknown"           // No se pudo interpretar
+  | "ignored";          // Mensaje propio del bot o número del bot (filtrado para evitar loop)
 
 // Mensaje de WhatsApp almacenado
 export interface WhatsappMessage {
@@ -324,6 +325,7 @@ export interface WhatsappIncomingPayload {
   pushName?: string;      // Nombre del contacto en WhatsApp
   messageId?: string;     // ID del mensaje en WhatsApp
   instanceName?: string;  // Nombre de la instancia en Evolution API
+  fromMe?: boolean;       // true si el mensaje fue enviado por el propio bot (Evolution API)
   rawPayload?: string;    // JSON completo original
 }
 
