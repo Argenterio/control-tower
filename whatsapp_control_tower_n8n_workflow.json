@@ -1,0 +1,98 @@
+{
+  "name": "Control Tower - WhatsApp Bot (Evolution API)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-control-tower",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook Evolution API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "webhookId": "whatsapp-control-tower"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extraer datos del webhook de Evolution API v1/v2\nconst body = items[0].json.body || items[0].json;\n\n// 1. Ignorar mensajes salientes enviados por el propio bot\nif ((body.data && body.data.key && body.data.key.fromMe === true) || (body.key && body.key.fromMe === true)) {\n  return [];\n}\n\n// 2. Extraer tel\u00e9fono del remitente (normalizado)\nlet remoteJid = \"\";\nif (body.data && body.data.key && body.data.key.remoteJid) {\n  remoteJid = body.data.key.remoteJid;\n} else if (body.key && body.key.remoteJid) {\n  remoteJid = body.key.remoteJid;\n} else if (body.sender) {\n  remoteJid = body.sender;\n}\n\nconst phone = remoteJid.replace(/@.*$/, \"\").replace(/[^0-9]/g, \"\");\nif (!phone) {\n  return [];\n}\n\n// 3. Extraer ID del mensaje (para idempotencia)\nconst messageId = (body.data && body.data.key && body.data.key.id) || (body.key && body.key.id) || undefined;\n\n// 4. Extraer contenido del mensaje seg\u00fan tipo\nlet messageText = \"\";\nlet messageType = \"text\";\nlet latitude = undefined;\nlet longitude = undefined;\nlet mediaUrl = undefined;\nlet mediaKey = undefined;\nlet mimetype = undefined;\n\nconst dataObj = body.data || body;\nconst msgObj = dataObj.message || {};\n\nconst instanceName = (dataObj.instance && dataObj.instance.name) || body.instanceName || \"control-tower\";\nconst apiKey = \"AE24B1606B9B-4393-BB70-7CD18DD40EFD\";\nconst evolutionBase = \"https://trafic.generarise.space\";\n\n// pickValidBase64: s\u00f3lo aceptar base64 de tama\u00f1o razonable (rechaza thumbnails de 14 bytes)\nfunction pickValidBase64(...candidates) {\n  for (const c of candidates) {\n    if (typeof c === \"string\" && c.length > 200) return c;\n  }\n  return undefined;\n}\n\nconst directBase64 = pickValidBase64(\n  msgObj.base64,\n  dataObj.base64,\n  msgObj.audioMessage && msgObj.audioMessage.base64,\n  msgObj.imageMessage && msgObj.imageMessage.base64,\n  msgObj.documentMessage && msgObj.documentMessage.base64\n);\n\n// FALLBACK CR\u00cdTICO: si el webhook NO trae base64 v\u00e1lido (caso normal en Evolution\n// para audios/im\u00e1genes/documentos), pedimos el base64 real a Evolution API.\n// Esto resuelve los audios que llegan como un stub de 14 bytes al backend.\nasync function fetchBase64FromEvolution() {\n  if (!messageId || !remoteJid || !apiKey) return null;\n  try {\n    const res = await this.helpers.httpRequest({\n      method: \"POST\",\n      url: `${evolutionBase}/chat/getBase64FromMediaMessage/${instanceName}`,\n      headers: { \"Content-Type\": \"application/json\", \"apikey\": apiKey },\n      body: {\n        message: { key: { remoteJid, fromMe: false, id: messageId } },\n        convertToMp4: false\n      },\n      json: true,\n      timeout: 20000\n    });\n    const b64 = (res && (res.base64 || (res.data && res.data.base64))) || null;\n    const mt = (res && (res.mimetype || (res.data && res.data.mimetype))) || null;\n    if (b64 && b64.length > 200) return { base64: b64, mimetype: mt };\n    return null;\n  } catch (e) {\n    return null;\n  }\n}\n\nconst isMedia = msgObj.audioMessage || msgObj.imageMessage || msgObj.videoMessage || msgObj.documentMessage || msgObj.stickerMessage;\nlet evolutionMedia = null;\nif (isMedia && !directBase64 && messageId) {\n  evolutionMedia = await fetchBase64FromEvolution();\n}\n\nconst finalBase64 = directBase64 || (evolutionMedia && evolutionMedia.base64);\nconst finalMime = (evolutionMedia && evolutionMedia.mimetype) || undefined;\n\nfunction asDataUrl(b64, mt) {\n  return `data:${mt || \"application/octet-stream\"};base64,${b64}`;\n}\n\nif (msgObj.conversation) {\n  messageText = msgObj.conversation;\n  messageType = \"text\";\n} else if (msgObj.extendedTextMessage && msgObj.extendedTextMessage.text) {\n  messageText = msgObj.extendedTextMessage.text;\n  messageType = \"text\";\n} else if (msgObj.imageMessage) {\n  messageText = msgObj.imageMessage.caption || \"\";\n  messageType = \"image\";\n  mediaUrl = finalBase64\n    ? asDataUrl(finalBase64, finalMime || msgObj.imageMessage.mimetype || \"image/jpeg\")\n    : (msgObj.imageMessage.url || dataObj.mediaUrl || undefined);\n  mediaKey = msgObj.imageMessage.mediaKey || dataObj.mediaKey || body.mediaKey || undefined;\n  mimetype = finalMime || msgObj.imageMessage.mimetype || \"image/jpeg\";\n} else if (msgObj.audioMessage) {\n  messageType = \"audio\";\n  mediaUrl = finalBase64\n    ? asDataUrl(finalBase64, finalMime || msgObj.audioMessage.mimetype || \"audio/ogg\")\n    : (msgObj.audioMessage.url || dataObj.mediaUrl || undefined);\n  mediaKey = msgObj.audioMessage.mediaKey || dataObj.mediaKey || body.mediaKey || undefined;\n  mimetype = finalMime || msgObj.audioMessage.mimetype || \"audio/ogg\";\n} else if (msgObj.videoMessage) {\n  messageText = msgObj.videoMessage.caption || \"\";\n  messageType = \"video\";\n  mediaUrl = finalBase64\n    ? asDataUrl(finalBase64, finalMime || msgObj.videoMessage.mimetype || \"video/mp4\")\n    : (msgObj.videoMessage.url || dataObj.mediaUrl || undefined);\n  mediaKey = msgObj.videoMessage.mediaKey || dataObj.mediaKey || body.mediaKey || undefined;\n  mimetype = finalMime || msgObj.videoMessage.mimetype || \"video/mp4\";\n} else if (msgObj.documentMessage) {\n  messageText = msgObj.documentMessage.caption || \"\";\n  messageType = \"document\";\n  mediaUrl = finalBase64\n    ? asDataUrl(finalBase64, finalMime || msgObj.documentMessage.mimetype || \"application/octet-stream\")\n    : (msgObj.documentMessage.url || dataObj.mediaUrl || undefined);\n  mediaKey = msgObj.documentMessage.mediaKey || dataObj.mediaKey || body.mediaKey || undefined;\n  mimetype = finalMime || msgObj.documentMessage.mimetype || \"application/octet-stream\";\n} else if (msgObj.locationMessage || msgObj.liveLocationMessage) {\n  const loc = msgObj.locationMessage || msgObj.liveLocationMessage;\n  messageType = \"location\";\n  latitude = loc.degreesLatitude;\n  longitude = loc.degreesLongitude;\n  messageText = loc.name || loc.address || \"\";\n} else {\n  messageType = \"unknown\";\n}\n\nreturn [{\n  json: {\n    phone,\n    remoteJid,\n    messageId,\n    messageType,\n    message: messageText,\n    mediaUrl,\n    mediaKey,\n    mimetype,\n    latitude,\n    longitude,\n    instanceName,\n    pushName: dataObj.pushName || body.pushName || undefined,\n    rawPayload: JSON.stringify(body)\n  }\n}];\n"
+      },
+      "name": "Parse Evolution Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.generarise.space/api/whatsapp/incoming",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ JSON.stringify($json) }}",
+        "headerParametersJson": "={\n  \"Content-Type\": \"application/json\"\n}",
+        "options": {}
+      },
+      "name": "Enviar a Control Tower API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.data.interpretation.responseMessage }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Hay Respuesta para Chofer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "=https://trafic.generarise.space/message/sendText/{{ $node[\"Parse Evolution Message\"].json[\"instanceName\"] }}",
+        "jsonParameters": true,
+        "bodyParametersJson": "={\n  \"number\": \"{{ $node[\"Parse Evolution Message\"].json[\"phone\"] }}\",\n  \"options\": {\n    \"delay\": 1200,\n    \"presence\": \"composing\"\n  },\n  \"textMessage\": {\n    \"text\": \"{{ $json.data.interpretation.responseMessage }}\"\n  }\n}",
+        "options": {}
+      },
+      "name": "Responder por WhatsApp (Evolution API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1160, 220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"processed\",\n  \"success\": true,\n  \"messageId\": \"{{ $node[\"Enviar a Control Tower API\"].json.data.messageId }}\"\n}",
+        "options": {}
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1160, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Evolution API": {
+      "main": [[{ "node": "Parse Evolution Message", "type": "main", "index": 0 }]]
+    },
+    "Parse Evolution Message": {
+      "main": [[{ "node": "Enviar a Control Tower API", "type": "main", "index": 0 }]]
+    },
+    "Enviar a Control Tower API": {
+      "main": [
+        [{ "node": "Hay Respuesta para Chofer?", "type": "main", "index": 0 }],
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    },
+    "Hay Respuesta para Chofer?": {
+      "main": [[{ "node": "Responder por WhatsApp (Evolution API)", "type": "main", "index": 0 }]]
+    }
+  }
+}

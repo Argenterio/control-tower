@@ -1,0 +1,479 @@
+Sí. Y para vender algo de este nivel necesitás respaldo, pero no necesariamente significa tener una gran empresa, certificaciones millonarias o ser una empresa de logística.
+
+Lo que necesitás es construir credibilidad técnica + contractual + operativa + seguridad de datos + soporte, y dejar muy claro que el sistema gestiona información y ayuda a decidir, pero no reemplaza las responsabilidades del transportista.
+
+Además, en transporte de cargas interjurisdiccional hay información regulatoria que el sistema puede ayudar a controlar: RUTA, RTO, licencias, documentación de transporte, seguros, etc. Y si vas a tratar geolocalización de choferes, hay que contemplar la Ley 25.326 y las bases legales/información correspondientes.
+
+Te preparo abajo el prompt maestro en Markdown, pensado para que después podamos utilizarlo para diseñar y construir el producto. Incluí también la parte de respaldo que deberías tener para poder venderlo seriamente.
+1. Mecanismo completo
+
+El flujo sería aproximadamente:
+
+                    ┌──────────────────────┐
+                    │      EMPRESA         │
+                    │ Transporte 001       │
+                    └──────────┬───────────┘
+                               │
+                 ┌─────────────┼──────────────┐
+                 │             │              │
+                 ▼             ▼              ▼
+              WEB/PANEL     WHATSAPP       CHOFER
+                 │             │              │
+                 └─────────────┼──────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │     API CENTRAL      │
+                    │ autenticación        │
+                    │ empresas / usuarios  │
+                    │ permisos             │
+                    └──────────┬───────────┘
+                               │
+        ┌──────────────────────┼─────────────────────┐
+        ▼                      ▼                     ▼
+   GPS/TELEMÁTICA          n8n / EVENTOS           APIs
+   ubicación               automatizaciones        mapas/tráfico
+        │                      │                     │
+        └──────────────────────┼─────────────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │   MOTOR OPERATIVO    │
+                    │                      │
+                    │ viajes               │
+                    │ unidades             │
+                    │ choferes             │
+                    │ rutas                │
+                    │ ETA                  │
+                    │ incidentes           │
+                    │ combustible           │
+                    │ mantenimiento         │
+                    └──────────┬───────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │      DATABASE        │
+                    │     PostgreSQL       │
+                    └──────────┬───────────┘
+                               │
+             ┌─────────────────┼────────────────┐
+             ▼                 ▼                ▼
+        DASHBOARD             IA              ALERTAS
+             │                 │                │
+             └─────────────────┼────────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │      ALEX CONTROL    │
+                    │ "¿Cómo estamos?"     │
+                    └──────────────────────┘
+Lo importante
+
+El VPS no es el producto.
+
+El producto es el software.
+
+El VPS es simplemente la infraestructura donde corre.
+
+2. ¿Cómo entra una empresa nueva?
+
+Por ejemplo:
+
+Empresa: Transporte González
+
+Tiene:
+
+80 camiones
+95 choferes
+12 usuarios administrativos
+400 viajes/mes
+
+Se registra.
+
+El sistema crea:
+
+TENANT: transporte_gonzalez
+
+
+Empresa
+ ├── Usuarios
+ ├── Camiones
+ ├── Choferes
+ ├── Clientes
+ ├── Viajes
+ ├── GPS
+ ├── Combustible
+ ├── Mantenimiento
+ ├── Documentos
+ ├── Incidentes
+ └── Finanzas
+
+No necesita otro servidor.
+
+Todo vive dentro de tu plataforma.
+
+3. ¿Cómo separamos los clientes?
+
+Esto es MUY importante.
+
+PostgreSQL puede tener una estructura como:
+
+companies
+users
+vehicles
+drivers
+customers
+trips
+locations
+fuel
+maintenance
+documents
+incidents
+expenses
+invoices
+
+Y prácticamente todas las tablas llevan:
+
+company_id
+
+Ejemplo:
+
+vehicles
+
+
+id
+company_id
+patente
+marca
+modelo
+estado
+
+Empresa A:
+
+company_id = 001
+
+Empresa B:
+
+company_id = 002
+
+El sistema jamás debe permitir que una consulta de Empresa A pueda acceder a Empresa B.
+
+Para una plataforma seria, además, implementaría controles a nivel de aplicación y, cuando la arquitectura lo permita, Row-Level Security de PostgreSQL.
+
+4. ¿Qué pasa cuando un camión se mueve?
+
+Supongamos que el camión 284 tiene GPS.
+
+El GPS envía:
+
+Patente: ABC123
+Latitud: ...
+Longitud: ...
+Velocidad: 82 km/h
+Fecha: 14/08/2026 16:45
+
+El proveedor GPS manda eso a tu API.
+
+Tu plataforma identifica:
+
+ABC123
+↓
+Empresa González
+↓
+Unidad 284
+↓
+Viaje #482
+↓
+Buenos Aires → Córdoba
+
+Entonces:
+
+GPS
+ ↓
+API
+ ↓
+Normalizador
+ ↓
+Base de datos
+ ↓
+Motor de eventos
+ ↓
+ETA
+ ↓
+Dashboard
+ ↓
+Alertas
+ ↓
+IA
+5. ¿Y el tráfico?
+
+Acá hay que diferenciar dos cosas.
+
+GPS
+
+Te dice:
+
+El camión está acá.
+
+Motor de mapas/tráfico
+
+Te ayuda a determinar:
+
+El camión debería estar acá, la ruta tiene esta demora y probablemente llegue a las 18:42.
+
+Entonces:
+
+POSICIÓN REAL
++
+RUTA
++
+TRÁFICO
++
+DESTINO
++
+HORA COMPROMETIDA
+        ↓
+      ETA
+        ↓
+¿LLEGA A TIEMPO?
+        ↓
+      SÍ / NO
+
+Y si la respuesta es NO:
+
+ALERTA
+↓
+OPERADOR
+↓
+CLIENTE (si corresponde)
+↓
+ALEX
+6. El sistema debería funcionar por eventos
+
+Esto es fundamental para que escale.
+
+No quiero que n8n esté haciendo absolutamente todo.
+
+Por ejemplo:
+
+16:32
+GPS detecta parada
+
+
+↓
+
+
+EVENTO:
+vehicle_stopped
+
+
+↓
+
+
+Motor determina:
+parada > 20 minutos
+
+
+↓
+
+
+EVENTO:
+unexpected_stop
+
+
+↓
+
+
+Sistema verifica:
+¿está dentro de una parada prevista?
+
+
+NO
+
+
+↓
+
+
+ALERTA
+
+
+↓
+
+
+Dashboard
++
+WhatsApp
++
+Alex
+
+n8n puede encargarse de muchas automatizaciones externas, pero el núcleo operacional debería estar en tu backend, no depender completamente de n8n.
+
+7. ¿Dónde entra n8n?
+
+En tu caso, lo aprovecharía muchísimo.
+
+Por ejemplo:
+
+WhatsApp
+   ↓
+Webhook
+   ↓
+n8n
+   ↓
+IA
+   ↓
+Interpretación
+   ↓
+API de tu plataforma
+   ↓
+Base de datos
+
+Ejemplo:
+
+El chofer manda:
+
+"Estoy llegando a Rosario, tuve una demora de 40 minutos por tránsito."
+
+n8n:
+
+recibe mensaje;
+identifica empresa;
+identifica chofer;
+identifica viaje;
+interpreta texto;
+registra incidente;
+actualiza estado;
+recalcula información;
+responde al chofer;
+genera alerta si corresponde.
+8. Pero hay algo todavía mejor
+
+El sistema debería tener un Event Bus.
+
+Conceptualmente:
+
+GPS
+WhatsApp
+Panel
+API
+GPS provider
+       │
+       ▼
+   EVENT BUS
+       │
+       ├── Operaciones
+       ├── Alertas
+       ├── IA
+       ├── Dashboard
+       ├── Finanzas
+       └── Auditoría
+
+Así después podés agregar cosas sin romper todo.
+
+9. ¿Cuántos VPS?
+Inicialmente: 1 VPS
+
+Perfectamente.
+
+Por ejemplo:
+
+VPS
+│
+├── Reverse Proxy
+├── Frontend
+├── Backend/API
+├── n8n
+├── PostgreSQL
+├── Redis
+└── Workers
+
+Para desarrollo/MVP incluso puede funcionar todo en una sola máquina.
+
+Pero para producción seria yo separaría progresivamente los servicios.
+
+10. Arquitectura que yo utilizaría
+ETAPA 1 — MVP
+
+Un VPS potente:
+
+8 vCPU
+16 GB RAM
+200 GB NVMe
+
+Puede ser suficiente para comenzar con una cantidad razonable de empresas y tráfico, siempre que la arquitectura sea eficiente.
+
+ETAPA 2 — primeras empresas reales
+
+Separaría:
+
+VPS 1
+API + Frontend
+
+
+VPS 2
+PostgreSQL
+
+
+VPS 3
+n8n + Workers
+
+
+VPS 4
+Redis / colas / procesamiento
+
+Por ejemplo:
+
+API
+8 vCPU
+16 GB
+
+
+DATABASE
+8 vCPU
+32 GB
+NVMe
+
+
+WORKERS
+8 vCPU
+16 GB
+
+
+n8n
+4–8 vCPU
+8–16 GB
+
+No necesariamente necesitás esos cuatro desde el día uno.
+
+11. ¿Qué consume realmente recursos?
+
+La cantidad de empresas no es el principal problema.
+
+Lo que puede ser pesado es:
+
+GPS
+
+100 camiones mandando ubicación cada 10 segundos:
+
+100 × 6 × 60 × 24
+= 864.000 posiciones/día
+
+500 camiones:
+
+4.320.000 posiciones/día
+
+Eso empieza a ser importante.
+
+Y si tenés:
+
+500 empresas
+×
+100 camiones promedio
+
+ya estás hablando de:
+
+50.000 vehículos.
+
+Ahí necesitás arquitectura distribuida.
+
+12. No guardaría todo en PostgreSQL eternamente
+
+Esto también es importante.
+
+Una posición GPS

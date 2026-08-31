@@ -1,0 +1,127 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "triggerMode": "runOnce"
+      },
+      "name": "Trigger Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.generarise.space/api/auth/login",
+        "jsonParameters": true,
+        "bodyParametersJson": "{\"email\":\"admin@controltower.com\",\"password\":\"admin123\"}"
+      },
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.generarise.space/api/companies",
+        "jsonParameters": true,
+        "bodyParametersJson": "{\"name\":\"Logistiva BLS\",\"ruci\":\"I-30-707123-4\",\"email\":\"contacto@logistibls.com\",\"phone\":\"+5493512345678\",\"address\":\"Av. San Martín 1230\",\"status\":\"active\"}",
+        "authentication": "headerAuth",
+        "headerAuth": {
+          "name": "Authorization",
+          "value": "={{ $json[\"data\"][\"token\"] }}"
+        }
+      },
+      "name": "Create Company",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Obtenemos el ID de la empresa creada en el nodo anterior\nconst companyId = $json.id;\n// Creamos un array con los 20 camiones\nconst vehicles = [];\nfor (let i = 1; i <= 20; i++) {\n  vehicles.push({\n    companyId: companyId,\n    licensePlate: \"BL-\" + i.toString().padStart(3, '0')\n  });\n}\nreturn vehicles;",
+      "name": "Generate Vehicles",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        950,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.generarise.space/api/vehicles",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ $json[\"companyId\"] }}",
+        "options": {
+          "bodyContent": "code",
+          "code": "{\n  \"companyId\": \"{{ $json.companyId }}\",\n  \"licensePlate\": \"{{ $json.licensePlate }}\",\n  \"brand\": \"Marca Ejemplo\",\n  \"model\": \"Camión\",\n  \"type\": \"truck\",\n  \"status\": \"active\"\n}"
+        }
+      },
+      "name": "Create Vehicles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Trigger Manual": {
+      "main": [
+        [
+          {
+            "node": "Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login": {
+      "main": [
+        [
+          {
+            "node": "Create Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Company": {
+      "main": [
+        [
+          {
+            "node": "Generate Vehicles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Vehicles": {
+      "main": [
+        [
+          {
+            "node": "Create Vehicles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
