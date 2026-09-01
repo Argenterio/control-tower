@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+/dist/
+/build/
+coverage/
+.npm
+.eslintcache
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Secrets & keys
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Uploads
+public/uploads/
+uploads/
+/data/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Testing
+.nyc_output/
+
+# Local config overrides
+.local/
