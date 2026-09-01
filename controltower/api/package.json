@@ -1,0 +1,48 @@
+{
+  "name": "controltower-api",
+  "version": "1.0.0",
+  "description": "Backend API para la plataforma Control Tower - Empresas de Transporte de Cargas",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "saas",
+    "transport",
+    "fleet",
+    "gps",
+    "whatsapp",
+    "posture"
+  ],
+  "author": "Control Tower",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.3",
+    "mime-types": "^2.1.35",
+    "pg": "^8.23.0",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "@prisma/client": "^7.9.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/mime-types": "^2.1.4",
+    "@types/node": "^20.8.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.0"
+  }
+}

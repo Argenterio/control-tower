@@ -21,8 +21,8 @@ import { SettingsPage } from './pages/SettingsPage';
 // Commercial pages (Fase 2)
 import LandingPage from './pages/LandingPage';
 import LeadsPage from './pages/LeadsPage';
-import { DriverMessagesPage } from './pages/DriverMessages';
-import { EvidencePage } from './pages/Evidence';
+import DriverMessagesPage from './pages/DriverMessages';
+import EvidencePage from './pages/Evidence';
 
 export default function App() {
   return (
