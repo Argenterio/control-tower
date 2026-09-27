@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Truck, Users, Route, Building2,
   Fuel, Wrench, FileText, AlertTriangle, Map,
   Settings, LogOut, ChevronLeft, ChevronRight, Radio,
-  MessageSquare, Image
+  MessageSquare, Image, Upload
 } from 'lucide-react';
 import { AiCopilot } from '../AiCopilot/AiCopilot';
 
@@ -23,6 +23,7 @@ const navItems = [
   { to: '/maintenance', label: 'Mantenimiento', icon: Wrench },
   { to: '/documents', label: 'Documentos', icon: FileText },
   { to: '/alerts', label: 'Alertas', icon: AlertTriangle },
+  { to: '/onboarding/import', label: 'Importar Onboarding', icon: Upload },
   { to: '/settings', label: 'Configuración', icon: Settings },
 ];
 

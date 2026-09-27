@@ -23,6 +23,7 @@ import LandingPage from './pages/LandingPage';
 import LeadsPage from './pages/LeadsPage';
 import DriverMessagesPage from './pages/DriverMessages';
 import EvidencePage from './pages/Evidence';
+import OnboardingImportPage from './pages/OnboardingImport';
 
 export default function App() {
   return (
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="driver-messages" element={<DriverMessagesPage />} />
               <Route path="evidence" element={<EvidencePage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="onboarding/import" element={<OnboardingImportPage />} />
             </Route>
 
             {/* Catch all */}

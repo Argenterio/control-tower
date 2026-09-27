@@ -16,8 +16,8 @@ interface VehicleFormState {
   licensePlate: string;
   brand: string;
   model: string;
-  type: 'truck' | 'van' | 'motorcycle';
-  status: 'active' | 'inactive' | 'maintenance' | 'out_of_service';
+  type: 'truck' | 'van' | 'motorcycle' | 'trailer' | 'utility';
+  status: 'active' | 'inactive' | 'maintenance' | 'out_of_service' | 'sold';
   kmTotal: number;
 }
 
@@ -62,6 +62,8 @@ export function AddVehicleForm({ isOpen, onClose, onCreated }: VehicleFormProps)
             <option value="truck">Camión</option>
             <option value="van">Utilitario</option>
             <option value="motorcycle">Motocicleta</option>
+            <option value="trailer">Semirremolque</option>
+            <option value="utility">Utilitario liviano</option>
           </select></label>
         </div>
         <div className="form-row">
@@ -74,6 +76,8 @@ export function AddVehicleForm({ isOpen, onClose, onCreated }: VehicleFormProps)
             <option value="active">Activo</option>
             <option value="inactive">Inactivo</option>
             <option value="maintenance">En mantenimiento</option>
+            <option value="out_of_service">Fuera de servicio</option>
+            <option value="sold">Vendido</option>
           </select></label>
         </div>
         <div className="form-actions">
@@ -102,7 +106,7 @@ interface DriverFormState {
   email: string;
   licenseNumber: string;
   licenseExpiry: string;
-  status: 'active' | 'inactive' | 'suspended';
+  status: 'active' | 'inactive' | 'suspended' | 'on_leave';
 }
 
 export function AddDriverForm({ isOpen, onClose, onCreated, initialData, onError, saving: externalSaving }: DriverFormProps) {
@@ -191,6 +195,7 @@ export function AddDriverForm({ isOpen, onClose, onCreated, initialData, onError
             <option value="active">Activo</option>
             <option value="inactive">Inactivo</option>
             <option value="suspended">Suspendido</option>
+            <option value="on_leave">De licencia</option>
           </select></label>
         </div>
         <div className="form-actions">
@@ -339,6 +344,7 @@ export function EditDriverForm({ isOpen, onClose, onUpdated, driver }: EditDrive
             <option value="active">Activo</option>
             <option value="inactive">Inactivo</option>
             <option value="suspended">Suspendido</option>
+            <option value="on_leave">De licencia</option>
           </select></label>
         </div>
         <div className="form-actions">

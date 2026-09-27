@@ -130,6 +130,12 @@ class ApiClient {
     throw new Error(res.data.error || 'Failed to create vehicle');
   }
 
+  async updateVehicle(id: string, data: Partial<Vehicle>): Promise<Vehicle> {
+    const res = await this.http.patch<ApiResponse<Vehicle>>(`/api/vehicles/${id}`, data);
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Failed to update vehicle');
+  }
+
   // === DRIVERS ===
   async getDrivers(companyId: string): Promise<Driver[]> {
     const res = await this.http.get<ApiResponse<Driver[]>>('/api/drivers', {
@@ -162,6 +168,12 @@ class ApiClient {
     const res = await this.http.post<ApiResponse<Customer>>('/api/customers', data);
     if (res.data.success && res.data.data) return res.data.data;
     throw new Error(res.data.error || 'Failed to create customer');
+  }
+
+  async updateCustomer(id: string, data: Partial<Customer>): Promise<Customer> {
+    const res = await this.http.patch<ApiResponse<Customer>>(`/api/customers/${id}`, data);
+    if (res.data.success && res.data.data) return res.data.data;
+    throw new Error(res.data.error || 'Failed to update customer');
   }
 
   // === TRIPS ===
@@ -278,6 +290,23 @@ class ApiClient {
     const res = await this.http.get<ApiResponse<any[]>>('/api/leads');
     if (res.data.success && res.data.data) return res.data.data;
     return [];
+  }
+
+  // === ONBOARDING IMPORT/EXPORT ===
+  async getOnboardingTemplate(): Promise<Blob> {
+    const res = await this.http.get('/api/admin/onboarding/template', { responseType: 'blob' });
+    return res.data;
+  }
+
+  async importOnboarding(file: File, companyId: string, dryRun = true): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('companyId', companyId);
+    formData.append('dryRun', String(dryRun));
+    const res = await this.http.post<ApiResponse<any>>('/api/admin/onboarding/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return res.data;
   }
 
   // === HEALTH ===

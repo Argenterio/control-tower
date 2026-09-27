@@ -676,11 +676,18 @@ export type Vehicle = {
   licensePlate: string;
   brand?: string;
   model?: string;
-  type: "truck" | "van" | "motorcycle";
-  status: "active" | "inactive" | "maintenance" | "out_of_service";
+  type: "truck" | "van" | "motorcycle" | "trailer" | "utility";
+  status: "active" | "inactive" | "maintenance" | "out_of_service" | "sold";
   kmTotal: number;
   kmCurrentTrip: number;
   lastGpsLocation?: string;
+  vin?: string;
+  year?: number;
+  capacityKg?: number;
+  insuranceExpiry?: string;
+  technicalReviewExpiry?: string;
+  routeAuthorizationExpiry?: string;
+  gpsDeviceId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -692,14 +699,21 @@ export type Driver = {
   userId?: string;
   licenseNumber?: string;
   licenseExpiry?: string;
+  licenseClass?: string;
   fullName: string;
   phone?: string;
   email?: string;
   dni?: string;
-  status: "active" | "inactive" | "suspended";
+  address?: string;
+  status: "active" | "inactive" | "suspended" | "on_leave";
   vehicleId?: string;
   totalTrips: number;
   totalKm: number;
+  artExpiry?: string;
+  medicalExpiry?: string;
+  toxicologyExpiry?: string;
+  hireDate?: string;
+  emergencyContact?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -713,7 +727,13 @@ export type Customer = {
   address?: string;
   phone?: string;
   email?: string;
-  status: "active" | "inactive";
+  contactPerson?: string;
+  contactPhone?: string;
+  status: "active" | "inactive" | "blocked";
+  paymentTermsDays?: number;
+  creditLimit?: number;
+  defaultOrigin?: string;
+  defaultDestination?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -810,6 +830,7 @@ export type Document = {
   status: "valid" | "expired" | "pending";
   uploadedAt: string;
   uploadedBy?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -1138,6 +1159,40 @@ export class DatabaseService {
     return this.getVehicle(id);
   }
 
+  updateVehicle(id: string, data: Partial<Vehicle>): Vehicle | null {
+    const now = new Date().toISOString();
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (data.licensePlate !== undefined) { fields.push("licensePlate = ?"); values.push(data.licensePlate); }
+    if (data.brand !== undefined) { fields.push("brand = ?"); values.push(data.brand); }
+    if (data.model !== undefined) { fields.push("model = ?"); values.push(data.model); }
+    if (data.type !== undefined) { fields.push("type = ?"); values.push(data.type); }
+    if (data.status !== undefined) { fields.push("status = ?"); values.push(data.status); }
+    if (data.kmTotal !== undefined) { fields.push("kmTotal = ?"); values.push(data.kmTotal); }
+    if (data.kmCurrentTrip !== undefined) { fields.push("kmCurrentTrip = ?"); values.push(data.kmCurrentTrip); }
+    if (data.lastGpsLocation !== undefined) { fields.push("lastGpsLocation = ?"); values.push(data.lastGpsLocation); }
+    if (data.vin !== undefined) { fields.push("vin = ?"); values.push(data.vin); }
+    if (data.year !== undefined) { fields.push("year = ?"); values.push(data.year); }
+    if (data.capacityKg !== undefined) { fields.push("capacityKg = ?"); values.push(data.capacityKg); }
+    if (data.insuranceExpiry !== undefined) { fields.push("insuranceExpiry = ?"); values.push(data.insuranceExpiry); }
+    if (data.technicalReviewExpiry !== undefined) { fields.push("technicalReviewExpiry = ?"); values.push(data.technicalReviewExpiry); }
+    if (data.routeAuthorizationExpiry !== undefined) { fields.push("routeAuthorizationExpiry = ?"); values.push(data.routeAuthorizationExpiry); }
+    if (data.gpsDeviceId !== undefined) { fields.push("gpsDeviceId = ?"); values.push(data.gpsDeviceId); }
+
+    fields.push("updatedAt = ?");
+    values.push(now);
+    values.push(id);
+
+    if (fields.length === 0) return null;
+
+    const stmt = this.db.prepare(`UPDATE vehicles SET ${fields.join(", ")} WHERE id = ?`);
+    const result = stmt.run(...values);
+
+    if (result.changes === 0) return null;
+    return this.getVehicle(id);
+  }
+
   // Driver methods
   getDrivers(companyId: string): Driver[] {
     return this.db.prepare("SELECT * FROM drivers WHERE companyId = ?").all(companyId) as Driver[];
@@ -1206,6 +1261,37 @@ export class DatabaseService {
       "INSERT INTO customers (id, companyId, name, taxId, address, phone, email, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
     );
     stmt.run(id, customer.companyId, customer.name, customer.taxId, customer.address, customer.phone, customer.email, now, now);
+    return this.getCustomer(id);
+  }
+
+  updateCustomer(id: string, data: Partial<Customer>): Customer | null {
+    const now = new Date().toISOString();
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    if (data.name !== undefined) { fields.push("name = ?"); values.push(data.name); }
+    if (data.taxId !== undefined) { fields.push("taxId = ?"); values.push(data.taxId); }
+    if (data.address !== undefined) { fields.push("address = ?"); values.push(data.address); }
+    if (data.phone !== undefined) { fields.push("phone = ?"); values.push(data.phone); }
+    if (data.email !== undefined) { fields.push("email = ?"); values.push(data.email); }
+    if (data.status !== undefined) { fields.push("status = ?"); values.push(data.status); }
+    if (data.contactPerson !== undefined) { fields.push("contactPerson = ?"); values.push(data.contactPerson); }
+    if (data.contactPhone !== undefined) { fields.push("contactPhone = ?"); values.push(data.contactPhone); }
+    if (data.paymentTermsDays !== undefined) { fields.push("paymentTermsDays = ?"); values.push(data.paymentTermsDays); }
+    if (data.creditLimit !== undefined) { fields.push("creditLimit = ?"); values.push(data.creditLimit); }
+    if (data.defaultOrigin !== undefined) { fields.push("defaultOrigin = ?"); values.push(data.defaultOrigin); }
+    if (data.defaultDestination !== undefined) { fields.push("defaultDestination = ?"); values.push(data.defaultDestination); }
+
+    fields.push("updatedAt = ?");
+    values.push(now);
+    values.push(id);
+
+    if (fields.length === 0) return null;
+
+    const stmt = this.db.prepare(`UPDATE customers SET ${fields.join(", ")} WHERE id = ?`);
+    const result = stmt.run(...values);
+
+    if (result.changes === 0) return null;
     return this.getCustomer(id);
   }
 

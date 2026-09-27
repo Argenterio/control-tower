@@ -8,6 +8,8 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import mime from "mime-types";
+import multer from "multer";
+import XLSX from "xlsx";
 import { dbService, rawDb } from "./database";
 import type { DatabaseService } from "./database";
 import {
@@ -26,6 +28,15 @@ import { seedDemoData } from "./seed";
 import { processIncomingWhatsappMessage } from "./whatsapp";
 import { askFleetAssistant, summarizeOperation } from "./ai";
 import { publicAIConfig, config } from "./config/env";
+
+// Extend Express Request for multer
+declare global {
+  namespace Express {
+    interface Request {
+      file?: Express.Multer.File;
+    }
+  }
+}
 import { signupCompany, OnboardingError } from "./onboarding";
 import type {
   Company,
@@ -48,6 +59,9 @@ import type {
   WhatsappIncomingPayload,
   WhatsappProcessResult
 } from "./types";
+
+// Multer config for file uploads (memory storage for Excel parsing)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Initialize express
 const app = express();
@@ -465,6 +479,17 @@ app.post("/api/vehicles", requireAuth, requireRole(...WRITE_ROLES), requireCompa
   res.status(201).json({ success: true, data: vehicle });
 });
 
+app.patch("/api/vehicles/:id", requireAuth, requireRole(...WRITE_ROLES), requireCompanyAccess, (req: express.Request, res: express.Response) => {
+  const companyId = res.locals.companyId as string;
+  const vehicle = dbService.getVehicle(req.params.id);
+  if (!vehicle || vehicle.companyId !== companyId) {
+    res.status(404).json({ success: false, error: "Vehicle not found" });
+    return;
+  }
+  const updated = dbService.updateVehicle(req.params.id, req.body);
+  res.json({ success: true, data: updated });
+});
+
 // === DRIVERS ROUTES ===
 app.get("/api/drivers", requireAuth, requireCompanyAccess, (req: express.Request, res: express.Response) => {
   const companyId = res.locals.companyId as string;
@@ -516,6 +541,284 @@ app.get("/api/leads", requireAuth, requireRole("admin", "manager"), (req: expres
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// === ONBOARDING IMPORT/EXPORT ROUTES ===
+// GET /api/admin/onboarding/template - Download Excel template
+app.get("/api/admin/onboarding/template", requireAuth, requireRole("admin", "manager"), (req: express.Request, res: express.Response) => {
+  try {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Vehicles
+    const vehicleHeaders = [
+      'licensePlate', 'brand', 'model', 'type', 'status', 'kmTotal', 'vin', 'year',
+      'capacityKg', 'insuranceExpiry', 'technicalReviewExpiry', 'routeAuthorizationExpiry', 'gpsDeviceId'
+    ];
+    const vehicleExample = {
+      licensePlate: 'AA123BB', brand: 'Mercedes Benz', model: 'Atego 1729', type: 'truck', status: 'active',
+      kmTotal: 450000, vin: 'WDB12345678901234', year: 2019, capacityKg: 17000,
+      insuranceExpiry: '2025-12-31', technicalReviewExpiry: '2025-06-15', routeAuthorizationExpiry: '2025-08-20', gpsDeviceId: 'GT06N-12345'
+    };
+    const wsVehicles = XLSX.utils.json_to_sheet([vehicleExample], { header: vehicleHeaders });
+    XLSX.utils.book_append_sheet(wb, wsVehicles, '01_Unidades_Flota');
+
+    // Sheet 2: Drivers
+    const driverHeaders = [
+      'fullName', 'dni', 'licenseNumber', 'licenseExpiry', 'licenseClass', 'phone', 'email', 'address',
+      'status', 'vehicleId', 'artExpiry', 'medicalExpiry', 'toxicologyExpiry', 'hireDate', 'emergencyContact'
+    ];
+    const driverExample = {
+      fullName: 'Juan Carlos Pérez', dni: '20123456789', licenseNumber: 'LC-12345678', licenseExpiry: '2026-03-15',
+      licenseClass: 'C', phone: '+54 9 11 5555-1234', email: 'chofer@empresa.com', address: 'Av. Siempre Viva 123',
+      status: 'active', vehicleId: 'AA123BB', artExpiry: '2025-12-31', medicalExpiry: '2025-11-20',
+      toxicologyExpiry: '2025-10-15', hireDate: '2020-01-15', emergencyContact: 'María Pérez +5491144443333'
+    };
+    const wsDrivers = XLSX.utils.json_to_sheet([driverExample], { header: driverHeaders });
+    XLSX.utils.book_append_sheet(wb, wsDrivers, '02_Choferes');
+
+    // Sheet 3: Customers
+    const customerHeaders = [
+      'name', 'taxId', 'address', 'phone', 'email', 'contactPerson', 'contactPhone',
+      'status', 'paymentTermsDays', 'creditLimit', 'defaultOrigin', 'defaultDestination'
+    ];
+    const customerExample = {
+      name: 'YPF S.A.', taxId: '30-12345678-9', address: 'Av. del Libertador 1000, CABA',
+      phone: '+54 11 4321-0000', email: 'compras@ypf.com', contactPerson: 'Lic. Ana García',
+      contactPhone: '+54 9 11 4444-5555', status: 'active', paymentTermsDays: 30,
+      creditLimit: 5000000, defaultOrigin: 'Planta Dock Sud', defaultDestination: 'Bahía Blanca'
+    };
+    const wsCustomers = XLSX.utils.json_to_sheet([customerExample], { header: customerHeaders });
+    XLSX.utils.book_append_sheet(wb, wsCustomers, '03_Clientes');
+
+    // Sheet 4: Expirations
+    const expHeaders = ['entityType', 'entityId', 'documentType', 'expiryDate', 'notes'];
+    const expExample = {
+      entityType: 'vehicle', entityId: 'AA123BB', documentType: 'insurance',
+      expiryDate: '2025-12-31', notes: 'Renovar con Seguros Rivadavia'
+    };
+    const wsExpirations = XLSX.utils.json_to_sheet([expExample], { header: expHeaders });
+    XLSX.utils.book_append_sheet(wb, wsExpirations, '04_Vencimientos');
+
+    // Instructions sheet
+    const instrData = [
+      { A: 'INSTRUCCIONES DE CARGA', B: '', C: '', D: '', E: '' },
+      { A: '', B: '', C: '', D: '', E: '' },
+      { A: '1. Formato de fechas', B: 'YYYY-MM-DD (ej: 2025-12-31)', C: '', D: '', E: '' },
+      { A: '2. Patentes', B: 'AA123BB (formato viejo) o AB123CD (formato nuevo Mercosur)', C: '', D: '', E: '' },
+      { A: '3. Teléfonos', B: 'Formato E.164: +54 9 11 1234-5678', C: '', D: '', E: '' },
+      { A: '4. CUIT', B: '11 dígitos con guiones: 30-12345678-9', C: '', D: '', E: '' },
+      { A: '5. Estados válidos', B: 'Vehículos: active|maintenance|inactive|sold', C: '', D: '', E: '' },
+      { A: '', B: 'Choferes: active|inactive|suspended|on_leave', C: '', D: '', E: '' },
+      { A: '', B: 'Clientes: active|inactive|blocked', C: '', D: '', E: '' },
+      { A: '6. Clases de licencia', B: 'B | C | D | E', C: '', D: '', E: '' },
+      { A: '7. Tipos de vehículo', B: 'truck | trailer | utility', C: '', D: '', E: '' },
+      { A: '8. Tipos de documento (vencimientos)', B: 'vehicle: insurance|technical_review|route_auth', C: '', D: '', E: '' },
+      { A: '', B: 'driver: license|art|medical|toxicology', C: '', D: '', E: '' },
+      { A: '9. No borre las filas de ejemplo', B: 'Sirven como guía; el sistema las ignora al importar', C: '', D: '', E: '' },
+      { A: '10. Guarde como .xlsx', B: 'Y envíelo al equipo de Control Tower', C: '', D: '', E: '' },
+    ];
+    const wsInstr = XLSX.utils.json_to_sheet(instrData, { header: ['A','B','C','D','E'], skipHeader: true });
+    wsInstr['!cols'] = [{ wch: 35 }, { wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="ControlTower_Onboarding_Template.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/admin/onboarding/import - Import onboarding Excel (dry-run or confirm)
+app.post("/api/admin/onboarding/import", requireAuth, requireRole("admin", "manager"), upload.single('file'), async (req: express.Request, res: express.Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No se subió ningún archivo' });
+      return;
+    }
+    const companyId = (req as any).user?.companyId || req.body.companyId;
+    if (!companyId) {
+      res.status(400).json({ success: false, error: 'companyId requerido' });
+      return;
+    }
+    const dryRun = req.body.dryRun !== 'false'; // default true
+
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const results = {
+      vehicles: { created: 0, updated: 0, errors: [] as string[] },
+      drivers: { created: 0, updated: 0, errors: [] as string[] },
+      customers: { created: 0, updated: 0, errors: [] as string[] },
+      expirations: { created: 0, errors: [] as string[] },
+    };
+
+    // Helper: get sheet data ignoring example row (first data row after header)
+    const getSheetData = (sheetName: string) => {
+      const ws = wb.Sheets[sheetName];
+      if (!ws) return [];
+      const data = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: '' });
+      // Skip first row if it matches example data
+      return data.slice(1).filter((row) => Object.values(row).some(v => v !== ''));
+    };
+
+    // --- VEHICLES ---
+    const vehiclesData = getSheetData('01_Unidades_Flota');
+    for (let i = 0; i < vehiclesData.length; i++) {
+      const row = vehiclesData[i];
+      const rowNum = i + 2; // +2 because header + skipped example
+      if (!row.licensePlate) { results.vehicles.errors.push(`Fila ${rowNum}: licensePlate requerido`); continue; }
+      const licensePlate = String(row.licensePlate).trim().toUpperCase();
+      try {
+        // Check if exists
+        const existing = dbService.getVehicles(companyId).find(v => v.licensePlate === licensePlate);
+        if (existing) {
+          if (!dryRun) {
+            dbService.updateVehicle(existing.id, {
+              brand: row.brand, model: row.model, type: row.type || 'truck',
+              status: row.status || 'active', kmTotal: Number(row.kmTotal) || 0,
+              vin: row.vin, year: Number(row.year) || 0, capacityKg: Number(row.capacityKg) || 0,
+              insuranceExpiry: row.insuranceExpiry, technicalReviewExpiry: row.technicalReviewExpiry,
+              routeAuthorizationExpiry: row.routeAuthorizationExpiry, gpsDeviceId: row.gpsDeviceId
+            });
+          }
+          results.vehicles.updated++;
+        } else {
+          if (!dryRun) {
+            dbService.createVehicle({
+              companyId, licensePlate, brand: row.brand, model: row.model, type: row.type || 'truck',
+              status: row.status || 'active', kmTotal: Number(row.kmTotal) || 0, kmCurrentTrip: 0,
+              vin: row.vin, year: Number(row.year) || 0, capacityKg: Number(row.capacityKg) || 0,
+              insuranceExpiry: row.insuranceExpiry, technicalReviewExpiry: row.technicalReviewExpiry,
+              routeAuthorizationExpiry: row.routeAuthorizationExpiry, gpsDeviceId: row.gpsDeviceId
+            });
+          }
+          results.vehicles.created++;
+        }
+      } catch (e: any) {
+        results.vehicles.errors.push(`Fila ${rowNum} (${licensePlate}): ${e.message}`);
+      }
+    }
+
+    // --- DRIVERS ---
+    const driversData = getSheetData('02_Choferes');
+    for (let i = 0; i < driversData.length; i++) {
+      const row = driversData[i];
+      const rowNum = i + 2;
+      if (!row.fullName || !row.dni || !row.licenseNumber) {
+        results.drivers.errors.push(`Fila ${rowNum}: fullName, dni y licenseNumber requeridos`);
+        continue;
+      }
+      const dni = String(row.dni).trim();
+      const licenseNumber = String(row.licenseNumber).trim();
+      try {
+        const existing = dbService.getDrivers(companyId).find(d => d.dni === dni || d.licenseNumber === licenseNumber);
+        const vehicleId = row.vehicleId ? String(row.vehicleId).trim().toUpperCase() : undefined;
+        if (existing) {
+          if (!dryRun) {
+            dbService.updateDriver(existing.id, {
+              fullName: row.fullName, licenseNumber, licenseExpiry: row.licenseExpiry,
+              licenseClass: row.licenseClass, phone: row.phone, email: row.email, address: row.address,
+              status: row.status || 'active', vehicleId, artExpiry: row.artExpiry,
+              medicalExpiry: row.medicalExpiry, toxicologyExpiry: row.toxicologyExpiry,
+              hireDate: row.hireDate, emergencyContact: row.emergencyContact
+            });
+          }
+          results.drivers.updated++;
+        } else {
+          if (!dryRun) {
+            dbService.createDriver({
+              companyId, fullName: row.fullName, dni, licenseNumber, licenseExpiry: row.licenseExpiry,
+              licenseClass: row.licenseClass || 'C', phone: row.phone, email: row.email, address: row.address,
+              status: row.status || 'active', vehicleId, artExpiry: row.artExpiry,
+              medicalExpiry: row.medicalExpiry, toxicologyExpiry: row.toxicologyExpiry,
+              hireDate: row.hireDate, emergencyContact: row.emergencyContact,
+              totalTrips: 0, totalKm: 0
+            });
+          }
+          results.drivers.created++;
+        }
+      } catch (e: any) {
+        results.drivers.errors.push(`Fila ${rowNum} (${dni}): ${e.message}`);
+      }
+    }
+
+    // --- CUSTOMERS ---
+    const customersData = getSheetData('03_Clientes');
+    for (let i = 0; i < customersData.length; i++) {
+      const row = customersData[i];
+      const rowNum = i + 2;
+      if (!row.name) { results.customers.errors.push(`Fila ${rowNum}: name requerido`); continue; }
+      try {
+        const existing = dbService.getCustomers(companyId).find(c => c.taxId && row.taxId && c.taxId === row.taxId);
+        if (existing) {
+          if (!dryRun) {
+            dbService.updateCustomer(existing.id, {
+              name: row.name, taxId: row.taxId, address: row.address, phone: row.phone,
+              email: row.email, contactPerson: row.contactPerson, contactPhone: row.contactPhone,
+              status: row.status || 'active', paymentTermsDays: Number(row.paymentTermsDays) || 0,
+              creditLimit: Number(row.creditLimit) || 0, defaultOrigin: row.defaultOrigin, defaultDestination: row.defaultDestination
+            });
+          }
+          results.customers.updated++;
+        } else {
+          if (!dryRun) {
+            dbService.createCustomer({
+              companyId, name: row.name, taxId: row.taxId, address: row.address, phone: row.phone,
+              email: row.email, contactPerson: row.contactPerson, contactPhone: row.contactPhone,
+              status: row.status || 'active', paymentTermsDays: Number(row.paymentTermsDays) || 0,
+              creditLimit: Number(row.creditLimit) || 0, defaultOrigin: row.defaultOrigin, defaultDestination: row.defaultDestination
+            });
+          }
+          results.customers.created++;
+        }
+      } catch (e: any) {
+        results.customers.errors.push(`Fila ${rowNum} (${row.name}): ${e.message}`);
+      }
+    }
+
+    // --- EXPIRATIONS ---
+    const expData = getSheetData('04_Vencimientos');
+    for (let i = 0; i < expData.length; i++) {
+      const row = expData[i];
+      const rowNum = i + 2;
+      if (!row.entityType || !row.entityId || !row.documentType || !row.expiryDate) {
+        results.expirations.errors.push(`Fila ${rowNum}: entityType, entityId, documentType, expiryDate requeridos`);
+        continue;
+      }
+      try {
+        if (!dryRun) {
+          // Create alert/expiration record - using documents table or a custom approach
+          // For now, we'll create a document record with type matching documentType
+          dbService.createDocument({
+            companyId,
+            type: row.documentType,
+            title: `${row.documentType} - ${row.entityId}`,
+            fileUrl: '',
+            expiryDate: row.expiryDate,
+            status: 'pending',
+            vehicleId: row.entityType === 'vehicle' ? row.entityId : undefined,
+            driverId: row.entityType === 'driver' ? row.entityId : undefined,
+            notes: row.notes,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy: 'Onboarding Import'
+          });
+        }
+        results.expirations.created++;
+      } catch (e: any) {
+        results.expirations.errors.push(`Fila ${rowNum}: ${e.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      dryRun,
+      summary: results,
+      message: dryRun ? 'Simulación completada (dry-run). No se guardaron cambios.' : 'Importación completada.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get("/api/customers", requireAuth, requireCompanyAccess, (req: express.Request, res: express.Response) => {
   const companyId = res.locals.companyId as string;
   const customers = dbService.getCustomers(companyId);
@@ -526,6 +829,17 @@ app.post("/api/customers", requireAuth, requireRole(...WRITE_ROLES), requireComp
   const companyId = res.locals.companyId as string;
   const customer = dbService.createCustomer({ ...req.body, companyId });
   res.status(201).json({ success: true, data: customer });
+});
+
+app.patch("/api/customers/:id", requireAuth, requireRole(...WRITE_ROLES), requireCompanyAccess, (req: express.Request, res: express.Response) => {
+  const companyId = res.locals.companyId as string;
+  const customer = dbService.getCustomer(req.params.id);
+  if (!customer || customer.companyId !== companyId) {
+    res.status(404).json({ success: false, error: "Customer not found" });
+    return;
+  }
+  const updated = dbService.updateCustomer(req.params.id, req.body);
+  res.json({ success: true, data: updated });
 });
 
 // === TRIPS ROUTES ===

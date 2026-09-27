@@ -39,11 +39,18 @@ export interface Vehicle {
   licensePlate: string;
   brand?: string;
   model?: string;
-  type: "truck" | "van" | "motorcycle";
-  status: "active" | "inactive" | "maintenance" | "out_of_service";
+  type: "truck" | "van" | "motorcycle" | "trailer" | "utility";
+  status: "active" | "inactive" | "maintenance" | "out_of_service" | "sold";
   kmTotal: number;
   kmCurrentTrip: number;
   lastGpsLocation?: string;
+  vin?: string;
+  year?: number;
+  capacityKg?: number;
+  insuranceExpiry?: string;
+  technicalReviewExpiry?: string;
+  routeAuthorizationExpiry?: string;
+  gpsDeviceId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,14 +62,21 @@ export interface Driver {
   userId?: string;
   licenseNumber?: string;
   licenseExpiry?: string;
+  licenseClass?: string;
   fullName: string;
   phone?: string;
   email?: string;
   dni?: string;
-  status: "active" | "inactive" | "suspended";
+  address?: string;
+  status: "active" | "inactive" | "suspended" | "on_leave";
   vehicleId?: string;
   totalTrips: number;
   totalKm: number;
+  artExpiry?: string;
+  medicalExpiry?: string;
+  toxicologyExpiry?: string;
+  hireDate?: string;
+  emergencyContact?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,7 +90,13 @@ export interface Customer {
   address?: string;
   phone?: string;
   email?: string;
-  status: "active" | "inactive";
+  contactPerson?: string;
+  contactPhone?: string;
+  status: "active" | "inactive" | "blocked";
+  paymentTermsDays?: number;
+  creditLimit?: number;
+  defaultOrigin?: string;
+  defaultDestination?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -173,6 +193,7 @@ export interface Document {
   status: "valid" | "expired" | "pending";
   uploadedAt: string;
   uploadedBy?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }
