@@ -298,6 +298,11 @@ class ApiClient {
     return res.data;
   }
 
+  async exportOnboarding(): Promise<Blob> {
+    const res = await this.http.get('/api/admin/onboarding/export', { responseType: 'blob' });
+    return res.data;
+  }
+
   async importOnboarding(file: File, companyId: string, dryRun = true): Promise<any> {
     const formData = new FormData();
     formData.append('file', file);

@@ -629,6 +629,134 @@ app.get("/api/admin/onboarding/template", requireAuth, requireRole("admin", "man
   }
 });
 
+// GET /api/admin/onboarding/export - Export current company data as Excel
+app.get("/api/admin/onboarding/export", requireAuth, requireRole("admin", "manager"), (req: express.Request, res: express.Response) => {
+  try {
+    const companyId = (req as any).user?.companyId;
+    if (!companyId) {
+      res.status(400).json({ success: false, error: 'companyId requerido' });
+      return;
+    }
+
+    const vehicles = dbService.getVehicles(companyId);
+    const drivers = dbService.getDrivers(companyId);
+    const customers = dbService.getCustomers(companyId);
+    const documents = dbService.getDocuments(companyId);
+
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Vehicles
+    const vehicleHeaders = [
+      'licensePlate', 'brand', 'model', 'type', 'status', 'kmTotal', 'vin', 'year',
+      'capacityKg', 'insuranceExpiry', 'technicalReviewExpiry', 'routeAuthorizationExpiry', 'gpsDeviceId'
+    ];
+    const vehicleData = vehicles.map(v => ({
+      licensePlate: v.licensePlate,
+      brand: v.brand || '',
+      model: v.model || '',
+      type: v.type,
+      status: v.status,
+      kmTotal: v.kmTotal,
+      vin: v.vin || '',
+      year: v.year || '',
+      capacityKg: v.capacityKg || '',
+      insuranceExpiry: v.insuranceExpiry || '',
+      technicalReviewExpiry: v.technicalReviewExpiry || '',
+      routeAuthorizationExpiry: v.routeAuthorizationExpiry || '',
+      gpsDeviceId: v.gpsDeviceId || ''
+    }));
+    const wsVehicles = XLSX.utils.json_to_sheet(vehicleData.length > 0 ? vehicleData : [{}], { header: vehicleHeaders });
+    XLSX.utils.book_append_sheet(wb, wsVehicles, '01_Unidades_Flota');
+
+    // Sheet 2: Drivers
+    const driverHeaders = [
+      'fullName', 'dni', 'licenseNumber', 'licenseExpiry', 'licenseClass', 'phone', 'email', 'address',
+      'status', 'vehicleId', 'artExpiry', 'medicalExpiry', 'toxicologyExpiry', 'hireDate', 'emergencyContact'
+    ];
+    const driverData = drivers.map(d => ({
+      fullName: d.fullName,
+      dni: d.dni || '',
+      licenseNumber: d.licenseNumber || '',
+      licenseExpiry: d.licenseExpiry || '',
+      licenseClass: d.licenseClass || '',
+      phone: d.phone || '',
+      email: d.email || '',
+      address: d.address || '',
+      status: d.status,
+      vehicleId: d.vehicleId || '',
+      artExpiry: d.artExpiry || '',
+      medicalExpiry: d.medicalExpiry || '',
+      toxicologyExpiry: d.toxicologyExpiry || '',
+      hireDate: d.hireDate || '',
+      emergencyContact: d.emergencyContact || ''
+    }));
+    const wsDrivers = XLSX.utils.json_to_sheet(driverData.length > 0 ? driverData : [{}], { header: driverHeaders });
+    XLSX.utils.book_append_sheet(wb, wsDrivers, '02_Choferes');
+
+    // Sheet 3: Customers
+    const customerHeaders = [
+      'name', 'taxId', 'address', 'phone', 'email', 'contactPerson', 'contactPhone',
+      'status', 'paymentTermsDays', 'creditLimit', 'defaultOrigin', 'defaultDestination'
+    ];
+    const customerData = customers.map(c => ({
+      name: c.name,
+      taxId: c.taxId || '',
+      address: c.address || '',
+      phone: c.phone || '',
+      email: c.email || '',
+      contactPerson: c.contactPerson || '',
+      contactPhone: c.contactPhone || '',
+      status: c.status,
+      paymentTermsDays: c.paymentTermsDays || '',
+      creditLimit: c.creditLimit || '',
+      defaultOrigin: c.defaultOrigin || '',
+      defaultDestination: c.defaultDestination || ''
+    }));
+    const wsCustomers = XLSX.utils.json_to_sheet(customerData.length > 0 ? customerData : [{}], { header: customerHeaders });
+    XLSX.utils.book_append_sheet(wb, wsCustomers, '03_Clientes');
+
+    // Sheet 4: Expirations (from documents)
+    const expHeaders = ['entityType', 'entityId', 'documentType', 'expiryDate', 'notes'];
+    const expData = documents
+      .filter(doc => doc.expiryDate)
+      .map(doc => ({
+        entityType: doc.vehicleId ? 'vehicle' : doc.driverId ? 'driver' : 'other',
+        entityId: doc.vehicleId || doc.driverId || '',
+        documentType: doc.type,
+        expiryDate: doc.expiryDate,
+        notes: doc.notes || ''
+      }));
+    const wsExpirations = XLSX.utils.json_to_sheet(expData.length > 0 ? expData : [{}], { header: expHeaders });
+    XLSX.utils.book_append_sheet(wb, wsExpirations, '04_Vencimientos');
+
+    // Instructions sheet
+    const instrData = [
+      { A: 'EXPORTACIÓN DE DATOS - Control Tower', B: '', C: '', D: '', E: '' },
+      { A: '', B: '', C: '', D: '', E: '' },
+      { A: 'Empresa ID', B: companyId, C: '', D: '', E: '' },
+      { A: 'Fecha exportación', B: new Date().toISOString().split('T')[0], C: '', D: '', E: '' },
+      { A: 'Total Unidades', B: vehicles.length, C: '', D: '', E: '' },
+      { A: 'Total Choferes', B: drivers.length, C: '', D: '', E: '' },
+      { A: 'Total Clientes', B: customers.length, C: '', D: '', E: '' },
+      { A: 'Total Vencimientos', B: expData.length, C: '', D: '', E: '' },
+      { A: '', B: '', C: '', D: '', E: '' },
+      { A: 'Este archivo puede usarse como plantilla', B: 'para cargar en otra empresa o hacer backup', C: '', D: '', E: '' },
+      { A: 'Modificá los datos y usá /api/admin/onboarding/import', B: 'para importar en otro tenant', C: '', D: '', E: '' },
+    ];
+    const wsInstr = XLSX.utils.json_to_sheet(instrData, { header: ['A','B','C','D','E'], skipHeader: true });
+    wsInstr['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Instrucciones');
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const filename = `ControlTower_Export_${companyId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/admin/onboarding/import - Import onboarding Excel (dry-run or confirm)
 app.post("/api/admin/onboarding/import", requireAuth, requireRole("admin", "manager"), upload.single('file'), async (req: express.Request, res: express.Response) => {
   try {

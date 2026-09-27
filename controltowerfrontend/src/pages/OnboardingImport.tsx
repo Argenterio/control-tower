@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import api from '../api/client';
 import { useToast } from '../components/Toast';
-import { Download, Upload, FileText, CheckCircle, Loader2, X } from 'lucide-react';
+import { Download, Upload, FileText, CheckCircle, Loader2, X, Save } from 'lucide-react';
 
 export default function OnboardingImportPage() {
   const { companyId } = useAuth();
@@ -12,6 +12,7 @@ export default function OnboardingImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dryRun, setDryRun] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -45,6 +46,24 @@ export default function OnboardingImportPage() {
       addToast('Plantilla descargada', 'success');
     } catch {
       addToast('Error al descargar plantilla', 'error');
+    }
+  };
+
+  const exportData = async () => {
+    setExporting(true);
+    try {
+      const blob = await api.exportOnboarding();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ControlTower_Export_${companyId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      addToast('Datos exportados', 'success');
+    } catch {
+      addToast('Error al exportar datos', 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -84,7 +103,10 @@ export default function OnboardingImportPage() {
           <h1><FileText size={28} className="page-icon" /> Importar Onboarding</h1>
           <p className="page-subtitle">Cargá unidades, choferes, clientes y vencimientos desde un Excel único</p>
         </div>
-        <button className="btn btn-secondary" onClick={downloadTemplate}><Download size={18} /> Descargar Plantilla</button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="btn btn-secondary" onClick={exportData} disabled={exporting}><Save size={18} /> Exportar Datos Actuales</button>
+          <button className="btn btn-secondary" onClick={downloadTemplate}><Download size={18} /> Descargar Plantilla Vacía</button>
+        </div>
       </div>
 
       {step === 'upload' && (
