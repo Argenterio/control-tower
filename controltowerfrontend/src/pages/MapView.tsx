@@ -57,14 +57,23 @@ interface FleetUnit {
 }
 
 const ESRI_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics';
+const CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const ENV = (import.meta as any).env || {};
 
+const CARTO_KEY = typeof ENV.VITE_CARTO_API_KEY === 'string' ? ENV.VITE_CARTO_API_KEY.trim() : '';
+const CARTO_DARK_URL = CARTO_KEY
+  ? `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(CARTO_KEY)}`
+  : '';
+const CARTO_STREETS_URL = CARTO_KEY
+  ? `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(CARTO_KEY)}`
+  : '';
 const ESRI_DARK_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const ESRI_STREETS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
 
 const LAYERS: Record<LayerKey, { url: string; attr: string; label: string }> = {
   dark: {
-    url: ENV.VITE_MAP_TILES_URL || ESRI_DARK_URL,
-    attr: ENV.VITE_MAP_ATTRIBUTION || ESRI_ATTR,
+    url: ENV.VITE_MAP_TILES_URL || CARTO_DARK_URL || ESRI_DARK_URL,
+    attr: ENV.VITE_MAP_ATTRIBUTION || (CARTO_DARK_URL ? CARTO_ATTR : ESRI_ATTR),
     label: 'Modo oscuro',
   },
   satellite: {
@@ -73,8 +82,8 @@ const LAYERS: Record<LayerKey, { url: string; attr: string; label: string }> = {
     label: 'Satélite',
   },
   streets: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-    attr: ESRI_ATTR,
+    url: CARTO_STREETS_URL || ESRI_STREETS_URL,
+    attr: CARTO_STREETS_URL ? CARTO_ATTR : ESRI_ATTR,
     label: 'Calles',
   },
 };
