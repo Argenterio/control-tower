@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Radio, ShieldCheck, ArrowRight, AlertTriangle, Cpu,
+  ShieldCheck, ArrowRight, AlertTriangle, Cpu,
   MapPin,
   X, Loader2, Truck, Users, ClipboardList,
   Smartphone
@@ -87,7 +87,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="landing-header">
         <Link to="/marketing" className="landing-logo">
-          <Radio size={32} />
+          <img src="/logo.svg" alt="Control Tower 360" className="landing-logo-img" />
           <span className="landing-logo-text">Control Tower 360</span>
         </Link>
         <div className="landing-nav-actions">
@@ -491,7 +491,7 @@ export default function LandingPage() {
       <footer className="landing-footer">
         <div className="footer-content">
           <Link to="/marketing" className="footer-logo">
-            <Radio size={20} />
+            <img src="/logo.svg" alt="" className="footer-logo-img" />
             <span>Control Tower 360</span>
           </Link>
           <span className="footer-text">

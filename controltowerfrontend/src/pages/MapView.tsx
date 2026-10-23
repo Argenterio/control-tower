@@ -56,15 +56,18 @@ interface FleetUnit {
   trip?: Trip;
 }
 
-const CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
-const ESRI_ATTR = '&copy; Esri &mdash; Esri, Maxar, Earthstar Geographics';
+const ESRI_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics';
 const ENV = (import.meta as any).env || {};
 
-const LAYERS: Record<LayerKey, { url: string; attr: string; label: string }> = {
+const ESRI_DARK_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const ESRI_DARK_REF_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
+
+const LAYERS: Record<LayerKey, { url: string; attr: string; label: string; overlay?: string }> = {
   dark: {
-    url: ENV.VITE_MAP_TILES_URL || 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attr: ENV.VITE_MAP_ATTRIBUTION || CARTO_ATTR,
+    url: ENV.VITE_MAP_TILES_URL || ESRI_DARK_URL,
+    attr: ENV.VITE_MAP_ATTRIBUTION || ESRI_ATTR,
     label: 'Modo oscuro',
+    overlay: ENV.VITE_MAP_TILES_URL ? undefined : ESRI_DARK_REF_URL,
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -72,8 +75,8 @@ const LAYERS: Record<LayerKey, { url: string; attr: string; label: string }> = {
     label: 'Satélite',
   },
   streets: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attr: CARTO_ATTR,
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attr: ESRI_ATTR,
     label: 'Calles',
   },
 };
@@ -226,14 +229,20 @@ function MapBridge({
   units,
   selected,
   onCursor,
+  onZoom,
 }: {
   units: FleetUnit[];
   selected: FleetUnit | null;
   onCursor: (lat: number, lng: number) => void;
+  onZoom: (zoom: number) => void;
 }) {
   const map = useMap();
   const didFit = useRef(false);
   const lastCursor = useRef(0);
+
+  useEffect(() => {
+    onZoom(map.getZoom());
+  }, [map, onZoom]);
 
   useEffect(() => {
     if (didFit.current) return;
@@ -256,6 +265,9 @@ function MapBridge({
       lastCursor.current = now;
       onCursor(event.latlng.lat, event.latlng.lng);
     },
+    zoomend() {
+      onZoom(map.getZoom());
+    },
   });
 
   return null;
@@ -276,6 +288,7 @@ export default function MapPage() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
   const [layer, setLayer] = useState<LayerKey>('dark');
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [panelOpen, setPanelOpen] = useState(true);
   const [cursor, setCursor] = useState<{ lat: number; lng: number } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -511,7 +524,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      <div className={`ct-map-shell${selectedUnit ? ' drawer-open' : ''}`}>
+      <div className={`ct-map-shell layer-${layer}${zoom < 8 ? ' zoom-far' : ''}${selectedUnit ? ' drawer-open' : ''}`}>
         <MapContainer
           ref={setMap}
           center={DEFAULT_CENTER}
@@ -528,6 +541,9 @@ export default function MapPage() {
             attribution={activeLayer.attr}
             eventHandlers={{ tileerror: handleTileError }}
           />
+          {activeLayer.overlay && (
+            <TileLayer key={`${layer}-labels`} url={activeLayer.overlay} opacity={0.75} />
+          )}
           {visibleMapped.map((unit) => (
             <VehicleMarker
               key={unit.vehicle.id}
@@ -540,6 +556,7 @@ export default function MapPage() {
             units={visibleMapped}
             selected={selectedUnit}
             onCursor={(lat, lng) => setCursor({ lat, lng })}
+            onZoom={setZoom}
           />
         </MapContainer>
 
@@ -669,7 +686,7 @@ export default function MapPage() {
           {cursor ? (
             <>
               <span>{cursor.lat.toFixed(5)}, {cursor.lng.toFixed(5)}</span>
-              <b>z{map?.getZoom() ?? DEFAULT_ZOOM}</b>
+              <b>z{zoom}</b>
             </>
           ) : (
             <span>Moviendo el cursor sobre el mapa</span>

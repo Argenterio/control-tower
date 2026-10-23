@@ -1759,6 +1759,19 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.25);
   white-space: nowrap;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.ct-map-shell.zoom-far .ct-marker__label {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+
+.ct-map-shell.zoom-far .ct-marker:hover .ct-marker__label,
+.ct-map-shell.zoom-far .ct-marker-wrap.is-selected .ct-marker__label {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .ct-marker--moving { --ct-color: #22d3ee; --ct-glow: rgba(34, 211, 238, 0.55); }
@@ -1807,6 +1820,10 @@ body {
 
 .ct-map-shell .leaflet-tile-pane {
   filter: saturate(1.02);
+}
+
+.ct-map-shell.layer-dark .leaflet-tile-pane {
+  filter: brightness(0.92) contrast(1.05) saturate(1.1);
 }
 
 @media (max-width: 1180px) {
