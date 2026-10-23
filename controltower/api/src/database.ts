@@ -627,6 +627,28 @@ safeAddColumn("whatsapp_messages", "fileName", "TEXT");
 safeAddColumn("trip_evidence", "mimeType", "TEXT");
 safeAddColumn("trip_evidence", "fileName", "TEXT");
 
+// Campos extendidos de flota / choferes / clientes (onboarding Excel y mapa operativo)
+safeAddColumn("vehicles", "vin", "TEXT");
+safeAddColumn("vehicles", "year", "INTEGER");
+safeAddColumn("vehicles", "capacityKg", "REAL");
+safeAddColumn("vehicles", "insuranceExpiry", "TEXT");
+safeAddColumn("vehicles", "technicalReviewExpiry", "TEXT");
+safeAddColumn("vehicles", "routeAuthorizationExpiry", "TEXT");
+safeAddColumn("vehicles", "gpsDeviceId", "TEXT");
+safeAddColumn("drivers", "licenseClass", "TEXT");
+safeAddColumn("drivers", "address", "TEXT");
+safeAddColumn("drivers", "artExpiry", "TEXT");
+safeAddColumn("drivers", "medicalExpiry", "TEXT");
+safeAddColumn("drivers", "toxicologyExpiry", "TEXT");
+safeAddColumn("drivers", "hireDate", "TEXT");
+safeAddColumn("drivers", "emergencyContact", "TEXT");
+safeAddColumn("customers", "contactPerson", "TEXT");
+safeAddColumn("customers", "contactPhone", "TEXT");
+safeAddColumn("customers", "paymentTermsDays", "INTEGER");
+safeAddColumn("customers", "creditLimit", "REAL");
+safeAddColumn("customers", "defaultOrigin", "TEXT");
+safeAddColumn("customers", "defaultDestination", "TEXT");
+
 // Insertar empresa por defecto
 db.exec(`
   INSERT OR IGNORE INTO companies (id, name, email, phone, address, status)
@@ -1153,9 +1175,32 @@ export class DatabaseService {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const stmt = this.db.prepare(
-      "INSERT INTO vehicles (id, companyId, licensePlate, brand, model, type, status, kmTotal, kmCurrentTrip, lastGpsLocation, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'active', 0, 0, NULL, ?, ?)"
+      `INSERT INTO vehicles (id, companyId, licensePlate, brand, model, type, status, kmTotal, kmCurrentTrip,
+        lastGpsLocation, vin, year, capacityKg, insuranceExpiry, technicalReviewExpiry,
+        routeAuthorizationExpiry, gpsDeviceId, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    stmt.run(id, vehicle.companyId, vehicle.licensePlate, vehicle.brand, vehicle.model, vehicle.type, now, now);
+    stmt.run(
+      id,
+      vehicle.companyId,
+      vehicle.licensePlate,
+      vehicle.brand ?? null,
+      vehicle.model ?? null,
+      vehicle.type,
+      vehicle.status,
+      vehicle.kmTotal ?? 0,
+      vehicle.kmCurrentTrip ?? 0,
+      vehicle.lastGpsLocation ?? null,
+      vehicle.vin ?? null,
+      vehicle.year ?? null,
+      vehicle.capacityKg ?? null,
+      vehicle.insuranceExpiry ?? null,
+      vehicle.technicalReviewExpiry ?? null,
+      vehicle.routeAuthorizationExpiry ?? null,
+      vehicle.gpsDeviceId ?? null,
+      now,
+      now
+    );
     return this.getVehicle(id);
   }
 
@@ -1208,9 +1253,35 @@ export class DatabaseService {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const stmt = this.db.prepare(
-      "INSERT INTO drivers (id, companyId, userId, licenseNumber, licenseExpiry, fullName, phone, email, dni, status, vehicleId, totalTrips, totalKm, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NULL, 0, 0, ?, ?)"
+      `INSERT INTO drivers (id, companyId, userId, licenseNumber, licenseExpiry, licenseClass, fullName,
+        phone, email, dni, address, status, vehicleId, totalTrips, totalKm, artExpiry, medicalExpiry,
+        toxicologyExpiry, hireDate, emergencyContact, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    stmt.run(id, driver.companyId, driver.userId, driver.licenseNumber, driver.licenseExpiry, driver.fullName, driver.phone, driver.email, driver.dni, now, now);
+    stmt.run(
+      id,
+      driver.companyId,
+      driver.userId ?? null,
+      driver.licenseNumber ?? null,
+      driver.licenseExpiry ?? null,
+      driver.licenseClass ?? null,
+      driver.fullName,
+      driver.phone ?? null,
+      driver.email ?? null,
+      driver.dni ?? null,
+      driver.address ?? null,
+      driver.status,
+      driver.vehicleId ?? null,
+      driver.totalTrips ?? 0,
+      driver.totalKm ?? 0,
+      driver.artExpiry ?? null,
+      driver.medicalExpiry ?? null,
+      driver.toxicologyExpiry ?? null,
+      driver.hireDate ?? null,
+      driver.emergencyContact ?? null,
+      now,
+      now
+    );
     return this.getDriver(id);
   }
 
@@ -1225,10 +1296,17 @@ export class DatabaseService {
     if (data.email !== undefined) { fields.push("email = ?"); values.push(data.email); }
     if (data.licenseNumber !== undefined) { fields.push("licenseNumber = ?"); values.push(data.licenseNumber); }
     if (data.licenseExpiry !== undefined) { fields.push("licenseExpiry = ?"); values.push(data.licenseExpiry); }
+    if (data.licenseClass !== undefined) { fields.push("licenseClass = ?"); values.push(data.licenseClass); }
+    if (data.address !== undefined) { fields.push("address = ?"); values.push(data.address); }
     if (data.status !== undefined) { fields.push("status = ?"); values.push(data.status); }
     if (data.vehicleId !== undefined) { fields.push("vehicleId = ?"); values.push(data.vehicleId); }
     if (data.totalTrips !== undefined) { fields.push("totalTrips = ?"); values.push(data.totalTrips); }
     if (data.totalKm !== undefined) { fields.push("totalKm = ?"); values.push(data.totalKm); }
+    if (data.artExpiry !== undefined) { fields.push("artExpiry = ?"); values.push(data.artExpiry); }
+    if (data.medicalExpiry !== undefined) { fields.push("medicalExpiry = ?"); values.push(data.medicalExpiry); }
+    if (data.toxicologyExpiry !== undefined) { fields.push("toxicologyExpiry = ?"); values.push(data.toxicologyExpiry); }
+    if (data.hireDate !== undefined) { fields.push("hireDate = ?"); values.push(data.hireDate); }
+    if (data.emergencyContact !== undefined) { fields.push("emergencyContact = ?"); values.push(data.emergencyContact); }
 
     fields.push("updatedAt = ?");
     values.push(now);
@@ -1258,9 +1336,28 @@ export class DatabaseService {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const stmt = this.db.prepare(
-      "INSERT INTO customers (id, companyId, name, taxId, address, phone, email, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
+      `INSERT INTO customers (id, companyId, name, taxId, address, phone, email, contactPerson,
+        contactPhone, status, paymentTermsDays, creditLimit, defaultOrigin, defaultDestination, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    stmt.run(id, customer.companyId, customer.name, customer.taxId, customer.address, customer.phone, customer.email, now, now);
+    stmt.run(
+      id,
+      customer.companyId,
+      customer.name,
+      customer.taxId ?? null,
+      customer.address ?? null,
+      customer.phone ?? null,
+      customer.email ?? null,
+      customer.contactPerson ?? null,
+      customer.contactPhone ?? null,
+      customer.status,
+      customer.paymentTermsDays ?? null,
+      customer.creditLimit ?? null,
+      customer.defaultOrigin ?? null,
+      customer.defaultDestination ?? null,
+      now,
+      now
+    );
     return this.getCustomer(id);
   }
 
