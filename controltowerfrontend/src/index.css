@@ -1822,10 +1822,6 @@ body {
   filter: saturate(1.02);
 }
 
-.ct-map-shell.layer-dark .leaflet-tile-pane {
-  filter: brightness(0.92) contrast(1.05) saturate(1.1);
-}
-
 @media (max-width: 1180px) {
   .ct-fleet-panel { width: 270px; }
   .ct-drawer { width: 320px; }

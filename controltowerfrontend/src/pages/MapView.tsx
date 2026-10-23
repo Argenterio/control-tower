@@ -60,14 +60,12 @@ const ESRI_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geog
 const ENV = (import.meta as any).env || {};
 
 const ESRI_DARK_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-const ESRI_DARK_REF_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
 
-const LAYERS: Record<LayerKey, { url: string; attr: string; label: string; overlay?: string }> = {
+const LAYERS: Record<LayerKey, { url: string; attr: string; label: string }> = {
   dark: {
     url: ENV.VITE_MAP_TILES_URL || ESRI_DARK_URL,
     attr: ENV.VITE_MAP_ATTRIBUTION || ESRI_ATTR,
     label: 'Modo oscuro',
-    overlay: ENV.VITE_MAP_TILES_URL ? undefined : ESRI_DARK_REF_URL,
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -541,9 +539,6 @@ export default function MapPage() {
             attribution={activeLayer.attr}
             eventHandlers={{ tileerror: handleTileError }}
           />
-          {activeLayer.overlay && (
-            <TileLayer key={`${layer}-labels`} url={activeLayer.overlay} opacity={0.75} />
-          )}
           {visibleMapped.map((unit) => (
             <VehicleMarker
               key={unit.vehicle.id}
